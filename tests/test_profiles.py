@@ -12,7 +12,6 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 from mwsat.profiles import (
-    load_era5_profile,
     load_igra_profile,
     validate_profile_data,
 )
@@ -41,11 +40,6 @@ def test_validate_profile_data_missing_field() -> None:
 def test_validate_profile_data_wrong_type() -> None:
     with pytest.raises(TypeError):
         validate_profile_data(["not", "a", "dict"])
-
-
-def test_load_era5_profile_not_implemented() -> None:
-    with pytest.raises(NotImplementedError):
-        load_era5_profile("dummy/path.nc")
 
 
 def test_load_igra_profile_not_implemented() -> None:
