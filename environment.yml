@@ -1,0 +1,19 @@
+name: mwsat
+channels:
+  - rttools
+  - conda-forge
+dependencies:
+  - python=3.11
+  - numpy
+  - pandas
+  - xarray
+  - scipy
+  - netcdf4
+  - matplotlib
+  - pyyaml
+  - scikit-learn
+  - pytest
+  - black
+  - ruff
+  - pyarts
+  - jupyterlab
