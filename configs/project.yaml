@@ -1,0 +1,19 @@
+project:
+  name: mw-sat-atmos-retrieval
+  package: mwsat
+  description: Microwave satellite atmospheric retrieval research workflow
+  version: 0.1.0
+
+runtime:
+  random_seed: 42
+  log_level: INFO
+  overwrite_outputs: false
+
+defaults:
+  experiment: baseline_clear_sky_temperature
+  instrument: baseline_mw_sounder
+  retrieval: baseline_temperature_retrieval
+
+environment:
+  clear_sky_only: true
+  use_pyarts: true

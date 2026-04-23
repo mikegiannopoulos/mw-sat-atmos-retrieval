@@ -1,0 +1,45 @@
+instrument:
+  name: baseline_mw_sounder
+  platform: generic_polar_orbiting
+  description: Placeholder microwave temperature sounding instrument
+
+  observation_geometry:
+    viewing_angle_deg: 0.0
+    altitude_km: 833.0
+
+  channels:
+    # Placeholder channel centers for an oxygen-band temperature sounding study
+    center_frequencies_ghz:
+      - 50.3
+      - 52.8
+      - 53.596
+      - 54.4
+      - 54.94
+      - 55.5
+      - 57.290344
+
+  radiometric_noise:
+    # Per-channel NEDT values aligned with center_frequencies_ghz
+    nedt_k:
+      - 0.30
+      - 0.30
+      - 0.25
+      - 0.25
+      - 0.20
+      - 0.20
+      - 0.20
+
+  spectral_response:
+    shape: gaussian
+    # Per-channel bandwidths aligned with center_frequencies_ghz
+    bandwidth_mhz:
+      - 250.0
+      - 250.0
+      - 200.0
+      - 200.0
+      - 180.0
+      - 180.0
+      - 150.0
+
+  sampling:
+    include_polarization: false

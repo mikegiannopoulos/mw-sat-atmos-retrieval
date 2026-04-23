@@ -1,0 +1,17 @@
+paths:
+  raw:
+    era5: data/raw/era5
+    igra: data/raw/igra
+    atms: data/raw/atms
+    chalmers_scattering: data/raw/chalmers_scattering
+
+  interim: data/interim
+  processed: data/processed
+
+  outputs:
+    figures: reports/figures
+    reports: reports
+    results: data/processed/results
+
+  notebooks: notebooks
+  configs: configs

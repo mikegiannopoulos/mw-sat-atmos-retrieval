@@ -1,0 +1,38 @@
+experiments:
+  - name: baseline_clear_sky_temperature
+    description: Baseline clear-sky temperature sounding experiment
+    mode: clear_sky_temperature
+
+    active: true
+    tags:
+      - baseline
+      - clear_sky
+      - temperature
+
+    inputs:
+      profile_source: era5
+      n_profiles: 100
+      profile_selection: random
+      random_seed: 42
+
+    forward_model:
+      solver: pyarts
+      atmosphere_dimension: 1D
+      scattering: false
+
+    instrument:
+      config: baseline_mw_sounder
+
+    retrieval:
+      config: baseline_temperature_retrieval
+
+    evaluation:
+      reference: truth_profiles
+      metrics:
+        - bias
+        - rmse
+
+    outputs:
+      subdirectory: baseline_clear_sky_temperature
+      save_simulated_tb: true
+      save_retrieval_results: true

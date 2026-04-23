@@ -1,0 +1,23 @@
+retrieval:
+  name: baseline_temperature_retrieval
+  target_variable: temperature
+  mode: clear_sky
+
+  vertical_grid:
+    source: reference_profile
+    unit: hPa
+
+  method:
+    type: optimal_estimation_baseline
+    max_iterations: 6
+    convergence_tolerance: 1.0e-3
+
+  priors:
+    temperature_source: climatology
+    use_fixed_covariance: true
+
+  outputs:
+    save_retrieved_profiles: true
+    save_diagnostics: true
+    save_jacobians: false
+    output_format: netcdf
