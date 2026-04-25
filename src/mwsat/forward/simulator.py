@@ -36,4 +36,7 @@ def simulate_brightness_temperature(profile: dict, instrument_config: dict) -> d
         for channel_index in range(len(center_frequencies))
     ]
 
-    return {"tb": tb}
+    return {
+        "tb": tb,
+        "n_channels": len(center_frequencies),
+    }
