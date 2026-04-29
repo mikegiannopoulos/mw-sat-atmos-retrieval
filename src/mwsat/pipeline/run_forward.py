@@ -3,6 +3,7 @@ from __future__ import annotations
 from mwsat.evaluation.metrics import compute_bias, compute_rmse
 from mwsat.forward.simulator import simulate_brightness_temperature
 from mwsat.pipeline.profile_loader import load_profile_from_config
+from mwsat.retrieval.baseline import retrieve_temperature_profile
 from mwsat.utils.config import get_active_experiment
 
 
@@ -28,6 +29,11 @@ def run_forward_simulation(configs: dict, path: str) -> dict:
         raise ValueError("Active experiment is missing 'inputs.profile_source'")
 
     result = simulate_brightness_temperature(profile, instrument_config)
+    retrieval_config = configs.get("retrieval")
+    if not isinstance(retrieval_config, dict):
+        raise ValueError("Missing retrieval configuration")
+
+    retrieval_result = retrieve_temperature_profile(result, retrieval_config)
     result["profile_source"] = profile_source
     reference = profile["temperature"]
     estimate = result["tb"]
@@ -38,4 +44,5 @@ def run_forward_simulation(configs: dict, path: str) -> dict:
         "bias": compute_bias(reference, estimate),
         "rmse": compute_rmse(reference, estimate),
     }
+    result["retrieval"] = retrieval_result
     return result
