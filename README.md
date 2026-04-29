@@ -82,6 +82,19 @@ conda env create -f environment.yml
 conda activate mwsat
 ```
 
+## Current Demo Workflow
+
+The current pipeline can be exercised with a small generated ERA5-like NetCDF file that serves as a placeholder input for development and testing.
+
+```bash
+python scripts/create_dummy_era5.py
+python scripts/run_experiment_summary.py
+```
+
+This currently runs configuration loading, ERA5-like profile ingestion, mock forward simulation, baseline retrieval, and metric aggregation.
+
+The present forward model and retrieval components are placeholders intended to support pipeline development. They will later be replaced or extended with ARTS/PyARTS-based forward simulation and more realistic retrieval methods.
+
 ## Current Project Status
 
 The project is in its initial development phase.
