@@ -95,6 +95,17 @@ This currently runs configuration loading, ERA5-like profile ingestion, mock for
 
 The present forward model and retrieval components are placeholders intended to support pipeline development. They will later be replaced or extended with ARTS/PyARTS-based forward simulation and more realistic retrieval methods.
 
+## ERA5 Sample Data
+
+Real ERA5 sample data can be downloaded with the CDS API helper script:
+
+```bash
+python scripts/download_era5_sample.py
+python scripts/run_forward_from_file.py data/raw/era5/real_era5.nc
+```
+
+CDS API credentials must be configured in `~/.cdsapirc` before download. Downloaded NetCDF files under `data/` are ignored by git and should not be committed.
+
 ## Current Project Status
 
 The project is in its initial development phase.
