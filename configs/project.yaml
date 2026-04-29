@@ -16,4 +16,4 @@ defaults:
 
 environment:
   clear_sky_only: true
-  use_pyarts: true
+  use_pyarts: false
