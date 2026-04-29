@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from mwsat.evaluation.metrics import compute_bias, compute_rmse
+from mwsat.forward.arts_adapter import simulate_with_arts
 from mwsat.forward.simulator import simulate_brightness_temperature
 from mwsat.pipeline.profile_loader import load_profile_from_config
 from mwsat.retrieval.baseline import retrieve_temperature_profile
@@ -28,7 +29,24 @@ def run_forward_simulation(configs: dict, path: str) -> dict:
     if not profile_source:
         raise ValueError("Active experiment is missing 'inputs.profile_source'")
 
-    result = simulate_brightness_temperature(profile, instrument_config)
+    environment_config = configs.get("environment")
+    if not isinstance(environment_config, dict):
+        project_config = configs.get("project")
+        if isinstance(project_config, dict):
+            environment_config = project_config.get("environment")
+
+    use_pyarts = False
+    if isinstance(environment_config, dict):
+        use_pyarts = bool(environment_config.get("use_pyarts", False))
+
+    if use_pyarts:
+        try:
+            result = simulate_with_arts(profile, instrument_config)
+        except Exception as exc:
+            raise RuntimeError("ARTS simulation failed") from exc
+    else:
+        result = simulate_brightness_temperature(profile, instrument_config)
+
     retrieval_config = configs.get("retrieval")
     if not isinstance(retrieval_config, dict):
         raise ValueError("Missing retrieval configuration")
