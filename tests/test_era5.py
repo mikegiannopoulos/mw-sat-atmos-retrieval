@@ -68,7 +68,10 @@ def test_load_era5_profile_missing_pressure(tmp_path: Path) -> None:
     path = tmp_path / "missing_pressure.nc"
     dataset.to_netcdf(path)
 
-    with pytest.raises(ValueError, match="vertical coordinate named 'pressure' or 'level'"):
+    with pytest.raises(
+        ValueError,
+        match="vertical coordinate named 'pressure', 'level', or 'pressure_level'",
+    ):
         load_era5_profile(str(path))
 
 
