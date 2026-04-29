@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from mwsat.evaluation.metrics import compute_bias, compute_rmse
 from mwsat.forward.simulator import simulate_brightness_temperature
 from mwsat.pipeline.profile_loader import load_profile_from_config
 from mwsat.utils.config import get_active_experiment
@@ -28,4 +29,13 @@ def run_forward_simulation(configs: dict, path: str) -> dict:
 
     result = simulate_brightness_temperature(profile, instrument_config)
     result["profile_source"] = profile_source
+    reference = profile["temperature"]
+    estimate = result["tb"]
+    n_values = min(len(reference), len(estimate))
+    reference = reference[:n_values]
+    estimate = estimate[:n_values]
+    result["metrics"] = {
+        "bias": compute_bias(reference, estimate),
+        "rmse": compute_rmse(reference, estimate),
+    }
     return result
