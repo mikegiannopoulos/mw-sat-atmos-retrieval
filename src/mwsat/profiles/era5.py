@@ -11,7 +11,7 @@ def _select_first_profile(data_array: xr.DataArray) -> xr.DataArray:
     indexers = {
         dim: 0
         for dim in data_array.dims
-        if dim not in {"level", "pressure"}
+        if dim not in {"level", "pressure", "pressure_level"}
     }
     if indexers:
         data_array = data_array.isel(**indexers)
@@ -22,8 +22,9 @@ def load_era5_profile(path: str) -> dict:
     """Load a single vertical temperature profile from an ERA5 NetCDF file.
 
     This function expects an ERA5-style NetCDF dataset containing a vertical
-    coordinate stored as either ``level`` or ``pressure`` and a temperature
-    variable stored as either ``t`` or ``temperature``.
+    coordinate stored as either ``pressure``, ``level``, or
+    ``pressure_level`` and a temperature variable stored as either ``t`` or
+    ``temperature``.
 
     The implementation is intentionally minimal. It extracts only one profile,
     selects the first element along any non-vertical dimensions, performs no
@@ -34,14 +35,14 @@ def load_era5_profile(path: str) -> dict:
 
     with xr.open_dataset(file_path) as dataset:
         pressure_name = None
-        for candidate in ("pressure", "level"):
+        for candidate in ("pressure", "level", "pressure_level"):
             if candidate in dataset.variables or candidate in dataset.coords:
                 pressure_name = candidate
                 break
         if pressure_name is None:
             raise ValueError(
                 "ERA5 file must contain a vertical coordinate named "
-                "'pressure' or 'level'"
+                "'pressure', 'level', or 'pressure_level'"
             )
 
         temperature_name = None
