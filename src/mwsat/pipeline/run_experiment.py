@@ -29,7 +29,11 @@ def run_experiment(configs: dict) -> dict:
     if not isinstance(paths_config, dict):
         raise ValueError("Missing paths configuration")
 
-    raw_paths = paths_config.get("raw")
+    paths_section = paths_config.get("paths")
+    if not isinstance(paths_section, dict):
+        raise ValueError("Missing nested paths configuration")
+
+    raw_paths = paths_section.get("raw")
     if not isinstance(raw_paths, dict):
         raise ValueError("Missing raw data paths configuration")
 
