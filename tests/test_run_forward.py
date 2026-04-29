@@ -57,3 +57,44 @@ def test_run_forward_simulation_missing_instrument_config(tmp_path: Path) -> Non
 
     with pytest.raises(ValueError):
         run_forward_simulation(configs, str(path))
+
+
+def test_run_forward_simulation_uses_mock_by_default(tmp_path: Path) -> None:
+    dataset = xr.Dataset(
+        data_vars={
+            "t": (("time", "level"), [[290.0, 285.0, 275.0]]),
+        },
+        coords={
+            "time": [0],
+            "level": [1000.0, 850.0, 700.0],
+        },
+    )
+    path = tmp_path / "forward_mock_default.nc"
+    dataset.to_netcdf(path)
+
+    configs = load_all_configs()
+    configs["project"]["environment"]["use_pyarts"] = False
+
+    result = run_forward_simulation(configs, str(path))
+
+    assert "tb" in result
+
+
+def test_run_forward_simulation_arts_backend_not_implemented(tmp_path: Path) -> None:
+    dataset = xr.Dataset(
+        data_vars={
+            "t": (("time", "level"), [[290.0, 285.0, 275.0]]),
+        },
+        coords={
+            "time": [0],
+            "level": [1000.0, 850.0, 700.0],
+        },
+    )
+    path = tmp_path / "forward_arts_backend.nc"
+    dataset.to_netcdf(path)
+
+    configs = load_all_configs()
+    configs["project"]["environment"]["use_pyarts"] = True
+
+    with pytest.raises(RuntimeError, match="ARTS simulation failed"):
+        run_forward_simulation(configs, str(path))
