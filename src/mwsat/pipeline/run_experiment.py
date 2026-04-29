@@ -6,13 +6,7 @@ from mwsat.pipeline.run_forward import run_forward_simulation
 from mwsat.utils.config import get_active_experiment
 
 
-def run_experiment(configs: dict) -> dict:
-    """Run a single config-driven experiment.
-
-    This helper resolves the active experiment, selects one input profile file,
-    and runs the current forward-plus-retrieval pipeline. Multi-profile support
-    will be added later.
-    """
+def _get_experiment_input_files(configs: dict) -> list[Path]:
     experiment = get_active_experiment(configs)
 
     inputs = experiment.get("inputs")
@@ -23,7 +17,11 @@ def run_experiment(configs: dict) -> dict:
     if not profile_source:
         raise ValueError("Active experiment is missing 'inputs.profile_source'")
 
-    inputs.get("n_profiles")
+    n_profiles = inputs.get("n_profiles")
+    if n_profiles is None:
+        raise ValueError("Active experiment is missing 'inputs.n_profiles'")
+    if n_profiles < 1:
+        raise ValueError("Active experiment 'inputs.n_profiles' must be at least 1")
 
     paths_config = configs.get("paths")
     if not isinstance(paths_config, dict):
@@ -49,4 +47,14 @@ def run_experiment(configs: dict) -> dict:
     if not files:
         raise ValueError(f"No input files found in profile data directory: {data_path}")
 
-    return run_forward_simulation(configs, str(files[0]))
+    return files[:n_profiles]
+
+
+def run_experiment_batch(configs: dict) -> list[dict]:
+    files = _get_experiment_input_files(configs)
+    return [run_forward_simulation(configs, str(path)) for path in files]
+
+
+def run_experiment(configs: dict) -> dict:
+    """Run a single config-driven experiment as a convenience wrapper."""
+    return run_experiment_batch(configs)[0]
