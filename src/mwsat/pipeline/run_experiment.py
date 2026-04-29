@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from mwsat.evaluation.batch_metrics import aggregate_metrics
 from mwsat.pipeline.run_forward import run_forward_simulation
 from mwsat.utils.config import get_active_experiment
 
@@ -58,3 +59,12 @@ def run_experiment_batch(configs: dict) -> list[dict]:
 def run_experiment(configs: dict) -> dict:
     """Run a single config-driven experiment as a convenience wrapper."""
     return run_experiment_batch(configs)[0]
+
+
+def run_experiment_summary(configs: dict) -> dict:
+    results = run_experiment_batch(configs)
+    summary = aggregate_metrics(results)
+    return {
+        "results": results,
+        "summary": summary,
+    }
