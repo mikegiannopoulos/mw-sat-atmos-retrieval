@@ -2,11 +2,12 @@ from __future__ import annotations
 
 
 def simulate_with_arts(profile: dict, instrument_config: dict) -> dict:
-    """Scaffold for future PyARTS-based radiative transfer simulation.
+    """Future PyARTS backend for clear-sky forward simulation.
 
-    This module will later host the ARTS/PyARTS forward-model implementation.
-    For now, the project continues to use the mock simulation in
-    ``simulator.py`` for placeholder brightness temperature calculations.
+    PyARTS is available in the target environment, but this adapter is
+    intentionally deferred until a verified ARTS 2.6 clear-sky workspace
+    setup is added. The current mock simulator remains the default backend
+    for forward calculations in this project.
     """
     try:
         import pyarts  # noqa: F401
@@ -16,6 +17,6 @@ def simulate_with_arts(profile: dict, instrument_config: dict) -> dict:
         ) from exc
 
     raise NotImplementedError(
-        "ARTS integration is scaffolded but not implemented yet. "
-        "Use the mock simulator in 'simulator.py' for now."
+        "PyARTS is available, but verified ARTS 2.6 clear-sky workspace setup "
+        "is still pending. The mock simulator remains the default backend."
     )

@@ -25,5 +25,5 @@ def test_simulate_with_arts_not_implemented() -> None:
         }
     }
 
-    with pytest.raises(NotImplementedError, match="implemented"):
+    with pytest.raises(NotImplementedError, match="still pending|workspace setup"):
         simulate_with_arts(profile, instrument_config)
