@@ -118,6 +118,16 @@ The ERA5 smoke-test script currently exercises:
 - controlled humidity perturbation diagnostics, and
 - small multi-profile experiment output generation.
 
+## Current Stress-Test Profiles
+
+To probe the stability of the diagnostic conclusions beyond the narrow regional ERA5 sample, the current workflow also includes a small set of controlled synthetic profiles built from a baseline ERA5 case:
+
+- warm/moist synthetic profile: temperature `+15 K` throughout the atmosphere and H2O VMR scaled by `x2`,
+- cold/dry synthetic profile: temperature `-15 K` throughout the atmosphere and H2O VMR scaled by `x0.3`, and
+- strong-lapse synthetic profile: an increased vertical temperature gradient with a warmer lower atmosphere and colder upper atmosphere.
+
+These profiles use the same pressure grid and geopotential-derived altitude as the baseline case and are treated as additional clear-sky sensitivity-analysis samples rather than as realistic global climatological cases.
+
 ## ERA5 Sample Data
 
 Small ERA5 sample data can be downloaded with:
@@ -174,6 +184,8 @@ The current diagnostics are useful for controlled forward-model checks, but they
 The project is now in a validated early forward-model stage.
 
 The core clear-sky PyARTS setup has been exercised against a small ERA5 sample with O2 + H2O absorption, simple instrument noise, perturbation-based temperature sensitivity diagnostics, multi-profile CSV outputs, and basic plots. This is enough to support controlled forward experiments and small sensitivity studies, but it is still short of a complete retrieval framework.
+
+Within the current regional ERA5 sample, the main channel-sensitivity patterns are fairly stable. The synthetic stress tests show that some regime dependence is already visible, however: warm/moist conditions can shift the strongest uniform temperature sensitivity toward `54.4 GHz`, and cold/dry conditions can slightly shift lower-layer sensitivity toward `50.3 GHz`. The humidity response also increases in the moist synthetic case, but it remains below the measurement-noise scale in this simple 3-channel setup. These are useful sensitivity-analysis results, but they should not be interpreted as evidence of global robustness or retrieval capability.
 
 ## Next Steps
 

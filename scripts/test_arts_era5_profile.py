@@ -36,10 +36,56 @@ MULTI_PROFILE_NOISE_BASE_SEED = 100
 TEMPERATURE_PERTURBATION_K = 1.0
 LOWER_ATMOSPHERE_PRESSURE_THRESHOLD_PA = 70000.0
 UPPER_ATMOSPHERE_PRESSURE_THRESHOLD_PA = 30000.0
-N_MULTI_PROFILES = 24
+N_MULTI_PROFILES = 32
 HUMIDITY_PERTURBATION_FRACTION = 0.1
 OVERWRITE_EXPERIMENT_OUTPUTS = True
 EXPERIMENT_OUTPUT_DIR = PROJECT_ROOT / "data" / "processed" / "experiments"
+REGION_SPECS = [
+    {
+        "region_name": "northern_sector_west",
+        "center_latitude": 57.95,
+        "center_longitude": 10.05,
+        "n_locations": 2,
+    },
+    {
+        "region_name": "northern_sector_east",
+        "center_latitude": 57.95,
+        "center_longitude": 10.95,
+        "n_locations": 2,
+    },
+    {
+        "region_name": "southern_sector_west",
+        "center_latitude": 57.05,
+        "center_longitude": 10.05,
+        "n_locations": 2,
+    },
+    {
+        "region_name": "southern_sector_east",
+        "center_latitude": 57.05,
+        "center_longitude": 10.95,
+        "n_locations": 2,
+    },
+]
+SYNTHETIC_PROFILE_SPECS = [
+    {
+        "region_name": "synthetic_warm_moist",
+        "sample_group": "synthetic_warm_moist",
+        "temperature_offset_k": 15.0,
+        "vmr_scale": 2.0,
+    },
+    {
+        "region_name": "synthetic_cold_dry",
+        "sample_group": "synthetic_cold_dry",
+        "temperature_offset_k": -15.0,
+        "vmr_scale": 0.3,
+    },
+    {
+        "region_name": "synthetic_strong_lapse",
+        "sample_group": "synthetic_strong_lapse",
+        "lapse_delta_k": 10.0,
+        "vmr_scale": 1.0,
+    },
+]
 
 
 baseline_instrument = InstrumentConfig(
@@ -166,6 +212,7 @@ def select_location_samples(
                 "longitude_index": None,
                 "latitude": None,
                 "longitude": None,
+                "region_name": "single_location",
                 "sample_group": "loc00",
             }
         ]
@@ -183,18 +230,76 @@ def select_location_samples(
         for longitude_index in range(len(longitude_values))
     ]
 
-    n_locations_target = max(1, int(np.ceil(target_profiles / n_selected_times)))
-    selected_location_indices = select_profile_indices(
-        len(location_grid), n_locations_target
-    )
     selected_locations = []
-    for location_index, grid_index in enumerate(selected_location_indices):
-        location = dict(location_grid[int(grid_index)])
-        location["location_index"] = location_index
-        location["sample_group"] = f"loc{location_index:02d}"
-        selected_locations.append(location)
+    used_indices: set[tuple[int, int]] = set()
+    location_index = 0
+
+    for region_spec in REGION_SPECS:
+        region_locations: list[dict[str, object]] = []
+        ranked_locations = sorted(
+            location_grid,
+            key=lambda location: (
+                (location["latitude"] - region_spec["center_latitude"]) ** 2
+                + (location["longitude"] - region_spec["center_longitude"]) ** 2
+            ),
+        )
+        for location in ranked_locations:
+            grid_key = (location["latitude_index"], location["longitude_index"])
+            if grid_key in used_indices:
+                continue
+            region_location = dict(location)
+            region_location["location_index"] = location_index
+            region_location["region_name"] = region_spec["region_name"]
+            region_location["sample_group"] = f"{region_spec['region_name']}_loc{len(region_locations):02d}"
+            region_locations.append(region_location)
+            used_indices.add(grid_key)
+            location_index += 1
+            if len(region_locations) >= int(region_spec["n_locations"]):
+                break
+
+        selected_locations.extend(region_locations)
+
+    if not selected_locations:
+        n_locations_target = max(1, int(np.ceil(target_profiles / n_selected_times)))
+        selected_location_indices = select_profile_indices(
+            len(location_grid), n_locations_target
+        )
+        for fallback_index, grid_index in enumerate(selected_location_indices):
+            location = dict(location_grid[int(grid_index)])
+            location["location_index"] = fallback_index
+            location["region_name"] = "fallback_region"
+            location["sample_group"] = f"fallback_loc{fallback_index:02d}"
+            selected_locations.append(location)
 
     return latitude_name, longitude_name, selected_locations
+
+
+def create_synthetic_profiles(
+    baseline_profile: dict[str, object], profile_start_index: int
+) -> list[dict[str, object]]:
+    synthetic_profiles: list[dict[str, object]] = []
+    for synthetic_offset, synthetic_spec in enumerate(SYNTHETIC_PROFILE_SPECS):
+        synthetic_profiles.append(
+            {
+                "profile_index": profile_start_index + synthetic_offset,
+                "profile_id": f"synthetic_{synthetic_offset:02d}",
+                "valid_time": baseline_profile["valid_time"],
+                "latitude": baseline_profile["latitude"],
+                "longitude": baseline_profile["longitude"],
+                "region_name": synthetic_spec["region_name"],
+                "sample_group": synthetic_spec["sample_group"],
+                "pressure": list(baseline_profile["pressure"]),
+                "temperature": list(baseline_profile["temperature"]),
+                "specific_humidity": list(baseline_profile["specific_humidity"]),
+                "geopotential": list(baseline_profile["geopotential"]),
+                "synthetic_temperature_offset_k": synthetic_spec.get(
+                    "temperature_offset_k", 0.0
+                ),
+                "synthetic_vmr_scale": synthetic_spec.get("vmr_scale", 1.0),
+                "synthetic_lapse_delta_k": synthetic_spec.get("lapse_delta_k", 0.0),
+            }
+        )
+    return synthetic_profiles
 
 
 def load_era5_arts_profiles(path: Path, limit: int) -> list[dict[str, object]]:
@@ -280,6 +385,7 @@ def load_era5_arts_profiles(path: Path, limit: int) -> list[dict[str, object]]:
                         "valid_time": None if valid_time is None else str(valid_time),
                         "latitude": location["latitude"],
                         "longitude": location["longitude"],
+                        "region_name": location["region_name"],
                         "sample_group": location["sample_group"],
                         "pressure": np.asarray(pressure.values, dtype=float).tolist(),
                         "temperature": np.asarray(temperature.values, dtype=float).tolist(),
@@ -288,6 +394,9 @@ def load_era5_arts_profiles(path: Path, limit: int) -> list[dict[str, object]]:
                     }
                 )
                 profile_counter += 1
+
+    if profiles:
+        profiles.extend(create_synthetic_profiles(profiles[0], profile_counter))
 
     return profiles
 
@@ -315,6 +424,21 @@ def prepare_arts_profile(
     geopotential = geopotential[order]
     altitude = geopotential / GRAVITY
     vmr_h2o = specific_humidity_to_h2o_vmr(humidity)
+
+    temperature_offset_k = float(profile.get("synthetic_temperature_offset_k", 0.0))
+    if temperature_offset_k != 0.0:
+        temperature = temperature + temperature_offset_k
+
+    lapse_delta_k = float(profile.get("synthetic_lapse_delta_k", 0.0))
+    if lapse_delta_k != 0.0:
+        lapse_adjustment = np.linspace(lapse_delta_k, -lapse_delta_k, len(temperature))
+        temperature = temperature + lapse_adjustment
+
+    vmr_scale = float(profile.get("synthetic_vmr_scale", 1.0))
+    if vmr_scale != 1.0:
+        vmr_h2o = vmr_h2o * vmr_scale
+
+    temperature = np.clip(temperature, 150.0, None)
     altitude_source = "ERA5 geopotential / 9.80665"
 
     validate_arts_profile_inputs(pressure, temperature, altitude, humidity, vmr_h2o)
@@ -409,6 +533,7 @@ def simulate_multi_profile_observations(
                     "valid_time": profile["valid_time"],
                     "latitude": profile["latitude"],
                     "longitude": profile["longitude"],
+                    "region_name": profile["region_name"],
                     "sample_group": profile["sample_group"],
                     "frequency_ghz": channel.frequency_hz / 1e9,
                     "tb_true_k": float(tb_true[channel_index, 0]),
@@ -447,6 +572,7 @@ def simulate_multi_profile_temperature_sensitivity(
                     "valid_time": profile["valid_time"],
                     "latitude": profile["latitude"],
                     "longitude": profile["longitude"],
+                    "region_name": profile["region_name"],
                     "sample_group": profile["sample_group"],
                     "frequency_ghz": channel.frequency_hz / 1e9,
                     "tb_base_k": float(results["y_base"][channel_index, 0]),
@@ -492,6 +618,7 @@ def simulate_multi_profile_layer_temperature_sensitivity(
                     "valid_time": profile["valid_time"],
                     "latitude": profile["latitude"],
                     "longitude": profile["longitude"],
+                    "region_name": profile["region_name"],
                     "sample_group": profile["sample_group"],
                     "frequency_ghz": channel.frequency_hz / 1e9,
                     "tb_base_k": float(results["y_base"][channel_index, 0]),
@@ -532,6 +659,7 @@ def simulate_multi_profile_humidity_sensitivity(
                     "valid_time": profile["valid_time"],
                     "latitude": profile["latitude"],
                     "longitude": profile["longitude"],
+                    "region_name": profile["region_name"],
                     "sample_group": profile["sample_group"],
                     "frequency_ghz": channel.frequency_hz / 1e9,
                     "tb_base_k": float(results["y_base"][channel_index, 0]),
@@ -572,6 +700,10 @@ def multi_profile_temperature_sensitivity_summary(
             mean_dtb_dt=("dTb_dT", "mean"),
             std_dtb_dt=("dTb_dT", lambda values: float(values.std(ddof=0))),
             mean_sensitivity_to_noise_ratio=("sensitivity_to_noise_ratio", "mean"),
+            std_sensitivity_to_noise_ratio=(
+                "sensitivity_to_noise_ratio",
+                lambda values: float(values.std(ddof=0)),
+            ),
             min_sensitivity_to_noise_ratio=("sensitivity_to_noise_ratio", "min"),
             max_sensitivity_to_noise_ratio=("sensitivity_to_noise_ratio", "max"),
         )
@@ -587,9 +719,13 @@ def multi_profile_layer_temperature_sensitivity_summary(
         results.groupby("frequency_ghz", as_index=False)
         .agg(
             mean_lower_ratio=("lower_ratio", "mean"),
+            std_lower_ratio=("lower_ratio", lambda values: float(values.std(ddof=0))),
             mean_upper_ratio=("upper_ratio", "mean"),
+            std_upper_ratio=("upper_ratio", lambda values: float(values.std(ddof=0))),
             mean_dtb_lower_k=("dTb_lower_k", "mean"),
+            std_dtb_lower_k=("dTb_lower_k", lambda values: float(values.std(ddof=0))),
             mean_dtb_upper_k=("dTb_upper_k", "mean"),
+            std_dtb_upper_k=("dTb_upper_k", lambda values: float(values.std(ddof=0))),
         )
         .sort_values("frequency_ghz")
     )
@@ -601,7 +737,9 @@ def multi_profile_humidity_sensitivity_summary(results: pd.DataFrame) -> pd.Data
         results.groupby("frequency_ghz", as_index=False)
         .agg(
             mean_dtb_humid_k=("dTb_humid_k", "mean"),
+            std_dtb_humid_k=("dTb_humid_k", lambda values: float(values.std(ddof=0))),
             mean_dtb_dry_k=("dTb_dry_k", "mean"),
+            std_dtb_dry_k=("dTb_dry_k", lambda values: float(values.std(ddof=0))),
             mean_humid_ratio=("humid_ratio", "mean"),
             mean_dry_ratio=("dry_ratio", "mean"),
             std_humid_ratio=("humid_ratio", lambda values: float(values.std(ddof=0))),
@@ -610,6 +748,93 @@ def multi_profile_humidity_sensitivity_summary(results: pd.DataFrame) -> pd.Data
         .sort_values("frequency_ghz")
     )
     return grouped
+
+
+def multi_profile_cross_region_stability_summary(
+    temperature_results: pd.DataFrame,
+    layer_results: pd.DataFrame,
+    humidity_results: pd.DataFrame,
+) -> dict[str, object]:
+    strongest_temperature = (
+        temperature_results.loc[
+            temperature_results.groupby("profile_index")[
+                "sensitivity_to_noise_ratio"
+            ].idxmax(),
+            ["profile_index", "frequency_ghz"],
+        ]
+        .sort_values("profile_index")
+        .reset_index(drop=True)
+    )
+    strongest_lower = (
+        layer_results.loc[
+            layer_results.groupby("profile_index")["lower_ratio"].idxmax(),
+            ["profile_index", "frequency_ghz"],
+        ]
+        .sort_values("profile_index")
+        .reset_index(drop=True)
+    )
+    strongest_upper = (
+        layer_results.loc[
+            layer_results.groupby("profile_index")["upper_ratio"].idxmax(),
+            ["profile_index", "frequency_ghz"],
+        ]
+        .sort_values("profile_index")
+        .reset_index(drop=True)
+    )
+    strongest_humidity = (
+        humidity_results.loc[
+            humidity_results.groupby("profile_index")["humid_ratio"].idxmax(),
+            ["profile_index", "frequency_ghz"],
+        ]
+        .sort_values("profile_index")
+        .reset_index(drop=True)
+    )
+
+    temperature_ratio_spread = (
+        temperature_results.groupby("frequency_ghz")["sensitivity_to_noise_ratio"]
+        .agg(lambda values: float(values.max() - values.min()))
+        .to_dict()
+    )
+    lower_ratio_spread = (
+        layer_results.groupby("frequency_ghz")["lower_ratio"]
+        .agg(lambda values: float(values.max() - values.min()))
+        .to_dict()
+    )
+    upper_ratio_spread = (
+        layer_results.groupby("frequency_ghz")["upper_ratio"]
+        .agg(lambda values: float(values.max() - values.min()))
+        .to_dict()
+    )
+    humid_ratio_spread = (
+        humidity_results.groupby("frequency_ghz")["humid_ratio"]
+        .agg(lambda values: float(values.max() - values.min()))
+        .to_dict()
+    )
+    max_humid_ratio = float(humidity_results["humid_ratio"].max())
+
+    return {
+        "strongest_temperature_counts": strongest_temperature["frequency_ghz"]
+        .value_counts()
+        .sort_index()
+        .to_dict(),
+        "strongest_lower_counts": strongest_lower["frequency_ghz"]
+        .value_counts()
+        .sort_index()
+        .to_dict(),
+        "strongest_upper_counts": strongest_upper["frequency_ghz"]
+        .value_counts()
+        .sort_index()
+        .to_dict(),
+        "strongest_humidity_counts": strongest_humidity["frequency_ghz"]
+        .value_counts()
+        .sort_index()
+        .to_dict(),
+        "temperature_ratio_spread": temperature_ratio_spread,
+        "lower_ratio_spread": lower_ratio_spread,
+        "upper_ratio_spread": upper_ratio_spread,
+        "humid_ratio_spread": humid_ratio_spread,
+        "max_humid_ratio": max_humid_ratio,
+    }
 
 
 def multi_profile_sensitivity_stability_summary(
@@ -645,7 +870,14 @@ def multi_profile_sensitivity_stability_summary(
 def multi_profile_diversity_summary(results: pd.DataFrame) -> pd.DataFrame:
     grouped = (
         results.groupby(
-            ["profile_index", "profile_id", "valid_time", "latitude", "longitude"],
+            [
+                "profile_index",
+                "profile_id",
+                "valid_time",
+                "latitude",
+                "longitude",
+                "region_name",
+            ],
             as_index=False,
         )
         .agg(
@@ -900,18 +1132,31 @@ def print_multi_profile_summary(results: pd.DataFrame) -> None:
     selected_valid_times = [
         value for value in results["valid_time"].drop_duplicates().tolist() if value is not None
     ]
-    selected_locations = (
-        results[["latitude", "longitude"]]
+    selected_region_locations = (
+        results[["region_name", "latitude", "longitude"]]
         .drop_duplicates()
-        .sort_values(["latitude", "longitude"])
-        .values.tolist()
+        .sort_values(["region_name", "latitude", "longitude"])
     )
     if selected_valid_times:
         print(f"Selected valid_time values: {selected_valid_times}")
-    if selected_locations:
-        print(f"Selected locations: {selected_locations}")
+    if not selected_region_locations.empty:
+        print("Selected regions and locations:")
+        for region_name, region_group in selected_region_locations.groupby(
+            "region_name", sort=True
+        ):
+            coordinates = region_group[["latitude", "longitude"]].values.tolist()
+            print(f"- {region_name}: {coordinates}")
+    region_counts = (
+        results.groupby("region_name")[["latitude", "longitude"]]
+        .apply(lambda group: len(group.drop_duplicates()))
+        .to_dict()
+    )
     print(f"Selected times: {len(selected_valid_times) if selected_valid_times else 1}")
-    print(f"Selected locations count: {len(selected_locations) if selected_locations else 1}")
+    print(f"Selected regions: {results['region_name'].nunique()}")
+    print(f"Locations per region: {region_counts}")
+    print(
+        f"Selected locations count: {len(selected_region_locations) if not selected_region_locations.empty else 1}"
+    )
     print(f"Profiles simulated: {results['profile_index'].nunique()}")
     print(f"Rows in DataFrame: {len(results)}")
     print(
@@ -932,10 +1177,13 @@ def print_multi_profile_summary(results: pd.DataFrame) -> None:
 
 def print_multi_profile_diversity_summary(summary: pd.DataFrame) -> None:
     print("Profile diversity summary:")
-    print("Profile | valid_time | surface T | min T | max T | max H2O VMR | Tb min | Tb max")
+    print(
+        "Profile | region | valid_time | surface T | min T | max T | "
+        "max H2O VMR | Tb min | Tb max"
+    )
     for row in summary.itertuples(index=False):
         print(
-            f"{row.profile_id} | {row.valid_time} | "
+            f"{row.profile_id} | {row.region_name} | {row.valid_time} | "
             f"{row.surface_temperature_k:.1f} K | {row.min_temperature_k:.1f} K | "
             f"{row.max_temperature_k:.1f} K | {row.max_h2o_vmr:.3e} | "
             f"{row.tb_min_k:.1f} K | {row.tb_max_k:.1f} K"
@@ -976,15 +1224,14 @@ def print_multi_profile_temperature_sensitivity_summary(
     print("Multi-profile temperature sensitivity summary:")
     print(
         "Frequency | Mean dTb/dT | Std dTb/dT | "
-        "Mean |dTb/dT|/NEΔT | Min |dTb/dT|/NEΔT | Max |dTb/dT|/NEΔT"
+        "Mean |dTb/dT|/NEΔT | Std |dTb/dT|/NEΔT"
     )
     for row in summary.itertuples(index=False):
         print(
             f"{row.frequency_ghz:.1f} GHz | {row.mean_dtb_dt:+.3f} K/K | "
             f"{row.std_dtb_dt:.3f} K/K | "
             f"{row.mean_sensitivity_to_noise_ratio:.3f} | "
-            f"{row.min_sensitivity_to_noise_ratio:.3f} | "
-            f"{row.max_sensitivity_to_noise_ratio:.3f}"
+            f"{row.std_sensitivity_to_noise_ratio:.3f}"
         )
     print(
         f"Profiles in sensitivity batch: {results['profile_index'].nunique()}, "
@@ -1047,6 +1294,57 @@ def print_multi_profile_humidity_sensitivity_summary(
     print(
         f"Profiles in humidity-sensitivity batch: {results['profile_index'].nunique()}, "
         f"rows: {len(results)}"
+    )
+
+
+def print_multi_profile_cross_region_stability_analysis(
+    summary: dict[str, object], n_profiles: int
+) -> None:
+    strongest_temperature_counts = summary["strongest_temperature_counts"]
+    strongest_lower_counts = summary["strongest_lower_counts"]
+    strongest_upper_counts = summary["strongest_upper_counts"]
+    strongest_humidity_counts = summary["strongest_humidity_counts"]
+
+    print("Cross-region sensitivity interpretation:")
+    print(
+        "Temperature strongest-channel counts by profile: "
+        f"{strongest_temperature_counts}"
+    )
+    print(
+        "Lower-atmosphere strongest-channel counts by profile: "
+        f"{strongest_lower_counts}"
+    )
+    print(
+        "Upper-atmosphere strongest-channel counts by profile: "
+        f"{strongest_upper_counts}"
+    )
+    print(
+        "Humidity strongest-channel counts by profile: "
+        f"{strongest_humidity_counts}"
+    )
+
+    temperature_uniform = len(strongest_temperature_counts) == 1
+    lower_uniform = len(strongest_lower_counts) == 1
+    upper_uniform = len(strongest_upper_counts) == 1
+    max_humid_ratio = float(summary["max_humid_ratio"])
+
+    print(
+        "Robustness interpretation: "
+        f"uniform-temperature sensitivity is {'stable' if temperature_uniform else 'profile-dependent'} "
+        f"across {n_profiles} profiles, and the lower/upper pattern is "
+        f"{'stable' if (lower_uniform and upper_uniform) else 'not fully stable'}."
+    )
+    print(
+        "Humidity interpretation: "
+        f"humidity sensitivity remains {'weak' if max_humid_ratio < 0.2 else 'non-negligible'} "
+        "throughout this sample because the humid ratios stay well below one."
+    )
+    print(
+        "Profile-variation interpretation: the largest profile-to-profile spread in "
+        f"|dTb/dT|/NEΔT by frequency is {summary['temperature_ratio_spread']}, the "
+        f"largest lower_ratio spread is {summary['lower_ratio_spread']}, the largest "
+        f"upper_ratio spread is {summary['upper_ratio_spread']}, and the humidity "
+        f"ratio spread is {summary['humid_ratio_spread']}."
     )
 
 
@@ -1245,6 +1543,13 @@ def main() -> None:
             multi_profile_layer_temperature_sensitivity_results,
         )
     )
+    multi_profile_cross_region_stability_results = (
+        multi_profile_cross_region_stability_summary(
+            multi_profile_temperature_sensitivity_results,
+            multi_profile_layer_temperature_sensitivity_results,
+            multi_profile_humidity_sensitivity_results,
+        )
+    )
     selected_profile_count = multi_profile_results["profile_index"].nunique()
     saved_output_paths = [
         save_experiment_dataframe(
@@ -1404,6 +1709,9 @@ def main() -> None:
     print_multi_profile_humidity_sensitivity_summary(
         multi_profile_humidity_sensitivity_results,
         multi_profile_humidity_sensitivity_grouped,
+    )
+    print_multi_profile_cross_region_stability_analysis(
+        multi_profile_cross_region_stability_results, selected_profile_count
     )
     print_multi_profile_sensitivity_stability_summary(
         multi_profile_sensitivity_stability_results, selected_profile_count

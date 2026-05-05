@@ -22,19 +22,51 @@ def load_inputs() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     return temperature_sensitivity, layer_sensitivity, humidity_sensitivity
 
 
+def is_synthetic_profile(region_name: str) -> bool:
+    return str(region_name).startswith("synthetic_")
+
+
+def synthetic_profile_label(region_name: str) -> str:
+    return str(region_name).replace("synthetic_", "Synthetic: ").replace("_", " ")
+
+
 def save_temperature_sensitivity_plot(
     temperature_sensitivity: pd.DataFrame,
 ) -> Path:
     output_path = OUTPUT_DIR / "temperature_sensitivity_vs_frequency.png"
     fig, ax = plt.subplots(figsize=(7, 4.5))
-    for profile_index, group in temperature_sensitivity.groupby("profile_index"):
+    era5_label_used = False
+    synthetic_styles = {
+        "synthetic_warm_moist": {"color": "tab:red", "marker": "s"},
+        "synthetic_cold_dry": {"color": "tab:blue", "marker": "^"},
+        "synthetic_strong_lapse": {"color": "tab:green", "marker": "D"},
+    }
+    for _, group in temperature_sensitivity.groupby("profile_index"):
         group = group.sort_values("frequency_ghz")
-        ax.plot(
-            group["frequency_ghz"],
-            group["dTb_dT"],
-            marker="o",
-            label=f"Profile {profile_index}",
-        )
+        region_name = str(group["region_name"].iloc[0])
+        if is_synthetic_profile(region_name):
+            style = synthetic_styles.get(region_name, {"color": "tab:orange", "marker": "o"})
+            ax.plot(
+                group["frequency_ghz"],
+                group["dTb_dT"],
+                color=style["color"],
+                marker=style["marker"],
+                linewidth=2.2,
+                markersize=6,
+                label=synthetic_profile_label(region_name),
+            )
+        else:
+            ax.plot(
+                group["frequency_ghz"],
+                group["dTb_dT"],
+                color="0.7",
+                marker="o",
+                linewidth=0.9,
+                markersize=3,
+                alpha=0.6,
+                label="ERA5 regional profiles" if not era5_label_used else None,
+            )
+            era5_label_used = True
     ax.set_title("Temperature Sensitivity vs Frequency")
     ax.set_xlabel("Frequency (GHz)")
     ax.set_ylabel("dTb/dT (K/K)")
@@ -51,14 +83,38 @@ def save_sensitivity_to_noise_plot(
 ) -> Path:
     output_path = OUTPUT_DIR / "sensitivity_to_noise_vs_frequency.png"
     fig, ax = plt.subplots(figsize=(7, 4.5))
-    for profile_index, group in temperature_sensitivity.groupby("profile_index"):
+    era5_label_used = False
+    synthetic_styles = {
+        "synthetic_warm_moist": {"color": "tab:red", "marker": "s"},
+        "synthetic_cold_dry": {"color": "tab:blue", "marker": "^"},
+        "synthetic_strong_lapse": {"color": "tab:green", "marker": "D"},
+    }
+    for _, group in temperature_sensitivity.groupby("profile_index"):
         group = group.sort_values("frequency_ghz")
-        ax.plot(
-            group["frequency_ghz"],
-            group["sensitivity_to_noise_ratio"],
-            marker="o",
-            label=f"Profile {profile_index}",
-        )
+        region_name = str(group["region_name"].iloc[0])
+        if is_synthetic_profile(region_name):
+            style = synthetic_styles.get(region_name, {"color": "tab:orange", "marker": "o"})
+            ax.plot(
+                group["frequency_ghz"],
+                group["sensitivity_to_noise_ratio"],
+                color=style["color"],
+                marker=style["marker"],
+                linewidth=2.2,
+                markersize=6,
+                label=synthetic_profile_label(region_name),
+            )
+        else:
+            ax.plot(
+                group["frequency_ghz"],
+                group["sensitivity_to_noise_ratio"],
+                color="0.7",
+                marker="o",
+                linewidth=0.9,
+                markersize=3,
+                alpha=0.6,
+                label="ERA5 regional profiles" if not era5_label_used else None,
+            )
+            era5_label_used = True
     ax.set_title("Sensitivity-to-Noise Ratio vs Frequency")
     ax.set_xlabel("Frequency (GHz)")
     ax.set_ylabel("|dTb/dT| / NEΔT")
