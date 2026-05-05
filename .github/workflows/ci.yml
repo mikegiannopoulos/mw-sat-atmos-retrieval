@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -l {0}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Conda environment
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: mwsat
+          environment-file: environment.yml
+          auto-activate-base: false
+
+      - name: Compile scripts
+        run: |
+          python -m py_compile \
+            scripts/download_era5_arts_sample.py \
+            scripts/test_arts_era5_profile.py \
+            scripts/test_arts_minimal.py
+
+      - name: Run tests
+        run: pytest
