@@ -11,6 +11,8 @@ from pyarts.workspace import Workspace, arts_agenda
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 FREQUENCIES_HZ = np.array([50.3e9, 52.8e9, 54.4e9])
 GRAVITY = 9.80665
+M_DRY_AIR_KG_PER_MOL = 28.9647e-3
+M_H2O_KG_PER_MOL = 18.01528e-3
 
 
 def default_era5_path() -> Path:
@@ -81,6 +83,11 @@ def load_era5_arts_profile(path: Path) -> dict[str, list[float]]:
     return profile
 
 
+def specific_humidity_to_h2o_vmr(q: np.ndarray) -> np.ndarray:
+    mass_mixing_ratio = q / (1.0 - q)
+    return mass_mixing_ratio * (M_DRY_AIR_KG_PER_MOL / M_H2O_KG_PER_MOL)
+
+
 def prepare_arts_profile(
     profile: dict,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, str]:
@@ -98,7 +105,7 @@ def prepare_arts_profile(
     humidity = humidity[order]
     geopotential = geopotential[order]
     altitude = geopotential / GRAVITY
-    vmr_h2o = humidity / (1.0 - humidity)
+    vmr_h2o = specific_humidity_to_h2o_vmr(humidity)
     altitude_source = "ERA5 geopotential / 9.80665"
 
     validate_arts_profile_inputs(pressure, temperature, altitude, humidity, vmr_h2o)
@@ -123,7 +130,7 @@ def validate_arts_profile_inputs(
     assert np.all(humidity >= 0.0)
     assert np.all(np.isfinite(vmr_h2o))
     assert np.all(vmr_h2o >= 0.0)
-    assert np.all(vmr_h2o < 0.05)
+    assert np.all(vmr_h2o < 0.1)
 
 
 def build_workspace(
@@ -233,7 +240,7 @@ def print_profile_summary(
         f"{altitude.min():.0f}-{altitude.max():.0f} m ({altitude_source})"
     )
     print(f"Specific humidity range: {humidity.min():.3e}-{humidity.max():.3e} kg/kg")
-    print(f"H2O VMR range: {vmr_h2o.min():.3e}-{vmr_h2o.max():.3e}")
+    print(f"True H2O VMR range: {vmr_h2o.min():.3e}-{vmr_h2o.max():.3e}")
 
 
 def print_brightness_temperatures(y: np.ndarray) -> None:
