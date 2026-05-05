@@ -15,6 +15,9 @@ if str(SRC_DIR) not in sys.path:
 
 from mwsat.forward.simulate import simulate_brightness_temperatures  # noqa: E402
 from mwsat.experiments.sensitivity import (  # noqa: E402
+    humidity_perturbation_sensitivity as run_humidity_perturbation_sensitivity,
+)
+from mwsat.experiments.sensitivity import (  # noqa: E402
     layer_temperature_sensitivity as run_layer_temperature_sensitivity,
 )
 from mwsat.experiments.sensitivity import (  # noqa: E402
@@ -33,7 +36,8 @@ MULTI_PROFILE_NOISE_BASE_SEED = 100
 TEMPERATURE_PERTURBATION_K = 1.0
 LOWER_ATMOSPHERE_PRESSURE_THRESHOLD_PA = 70000.0
 UPPER_ATMOSPHERE_PRESSURE_THRESHOLD_PA = 30000.0
-N_MULTI_PROFILES = 6
+N_MULTI_PROFILES = 24
+HUMIDITY_PERTURBATION_FRACTION = 0.1
 OVERWRITE_EXPERIMENT_OUTPUTS = True
 EXPERIMENT_OUTPUT_DIR = PROJECT_ROOT / "data" / "processed" / "experiments"
 
@@ -135,6 +139,64 @@ def select_profile_indices(n_available: int, n_select: int) -> np.ndarray:
     return np.unique(np.round(np.linspace(0, n_available - 1, n_select)).astype(int))
 
 
+def select_time_indices(n_available: int, target_profiles: int) -> np.ndarray:
+    if n_available <= 1:
+        return np.arange(n_available, dtype=int)
+    n_select = min(n_available, max(2, int(np.floor(np.sqrt(target_profiles)))))
+    return select_profile_indices(n_available, n_select)
+
+
+def select_location_samples(
+    dataset: xr.Dataset, target_profiles: int, n_selected_times: int
+) -> tuple[str | None, str | None, list[dict[str, object]]]:
+    latitude_name = next(
+        (name for name in ("latitude", "lat") if name in dataset.coords),
+        None,
+    )
+    longitude_name = next(
+        (name for name in ("longitude", "lon") if name in dataset.coords),
+        None,
+    )
+
+    if latitude_name is None or longitude_name is None:
+        return latitude_name, longitude_name, [
+            {
+                "location_index": 0,
+                "latitude_index": None,
+                "longitude_index": None,
+                "latitude": None,
+                "longitude": None,
+                "sample_group": "loc00",
+            }
+        ]
+
+    latitude_values = np.asarray(dataset[latitude_name].values).reshape(-1)
+    longitude_values = np.asarray(dataset[longitude_name].values).reshape(-1)
+    location_grid = [
+        {
+            "latitude_index": latitude_index,
+            "longitude_index": longitude_index,
+            "latitude": float(latitude_values[latitude_index]),
+            "longitude": float(longitude_values[longitude_index]),
+        }
+        for latitude_index in range(len(latitude_values))
+        for longitude_index in range(len(longitude_values))
+    ]
+
+    n_locations_target = max(1, int(np.ceil(target_profiles / n_selected_times)))
+    selected_location_indices = select_profile_indices(
+        len(location_grid), n_locations_target
+    )
+    selected_locations = []
+    for location_index, grid_index in enumerate(selected_location_indices):
+        location = dict(location_grid[int(grid_index)])
+        location["location_index"] = location_index
+        location["sample_group"] = f"loc{location_index:02d}"
+        selected_locations.append(location)
+
+    return latitude_name, longitude_name, selected_locations
+
+
 def load_era5_arts_profiles(path: Path, limit: int) -> list[dict[str, object]]:
     profiles: list[dict[str, object]] = []
     with xr.open_dataset(path) as dataset:
@@ -156,43 +218,76 @@ def load_era5_arts_profiles(path: Path, limit: int) -> list[dict[str, object]]:
             None,
         )
         time_size = int(dataset.sizes.get(time_name, 1)) if time_name else 1
-        profile_indices = select_profile_indices(time_size, limit)
+        time_indices = select_time_indices(time_size, limit)
+        latitude_name, longitude_name, selected_locations = select_location_samples(
+            dataset, limit, len(time_indices) if len(time_indices) else 1
+        )
 
-        for profile_index in profile_indices:
-            indexers = {}
-            if time_name:
-                indexers[time_name] = int(profile_index)
-            for dim in dataset[temperature_name].dims:
-                if dim not in {"level", "pressure", "pressure_level", time_name}:
-                    indexers[dim] = 0
-
-            pressure = dataset[pressure_name]
-            if time_name and time_name in pressure.dims:
-                pressure = pressure.isel({time_name: int(profile_index)})
-            for dim in pressure.dims:
-                if dim not in {"level", "pressure", "pressure_level"}:
-                    pressure = pressure.isel({dim: 0})
-
-            temperature = dataset[temperature_name].isel(**indexers).squeeze()
-            humidity = dataset[humidity_name].isel(**indexers).squeeze()
-            geopotential = dataset[geopotential_name].isel(**indexers).squeeze()
-
+        profile_counter = 0
+        for time_index in time_indices:
             valid_time = None
             if time_name:
                 valid_time_values = np.asarray(dataset[time_name].values).reshape(-1)
-                if int(profile_index) < len(valid_time_values):
-                    valid_time = valid_time_values[int(profile_index)]
+                if int(time_index) < len(valid_time_values):
+                    valid_time = valid_time_values[int(time_index)]
 
-            profiles.append(
-                {
-                    "profile_index": int(profile_index),
-                    "valid_time": None if valid_time is None else str(valid_time),
-                    "pressure": np.asarray(pressure.values, dtype=float).tolist(),
-                    "temperature": np.asarray(temperature.values, dtype=float).tolist(),
-                    "specific_humidity": np.asarray(humidity.values, dtype=float).tolist(),
-                    "geopotential": np.asarray(geopotential.values, dtype=float).tolist(),
-                }
-            )
+            for location in selected_locations:
+                indexers = {}
+                if time_name:
+                    indexers[time_name] = int(time_index)
+                if latitude_name and location["latitude_index"] is not None:
+                    indexers[latitude_name] = int(location["latitude_index"])
+                if longitude_name and location["longitude_index"] is not None:
+                    indexers[longitude_name] = int(location["longitude_index"])
+                for dim in dataset[temperature_name].dims:
+                    if dim not in {
+                        "level",
+                        "pressure",
+                        "pressure_level",
+                        time_name,
+                        latitude_name,
+                        longitude_name,
+                    }:
+                        indexers[dim] = 0
+
+                pressure = dataset[pressure_name]
+                pressure_indexers = {}
+                for dim in pressure.dims:
+                    if dim == time_name:
+                        pressure_indexers[dim] = int(time_index)
+                    elif dim == latitude_name and location["latitude_index"] is not None:
+                        pressure_indexers[dim] = int(location["latitude_index"])
+                    elif (
+                        dim == longitude_name
+                        and location["longitude_index"] is not None
+                    ):
+                        pressure_indexers[dim] = int(location["longitude_index"])
+                    elif dim not in {"level", "pressure", "pressure_level"}:
+                        pressure_indexers[dim] = 0
+                if pressure_indexers:
+                    pressure = pressure.isel(**pressure_indexers)
+
+                temperature = dataset[temperature_name].isel(**indexers).squeeze()
+                humidity = dataset[humidity_name].isel(**indexers).squeeze()
+                geopotential = dataset[geopotential_name].isel(**indexers).squeeze()
+
+                profiles.append(
+                    {
+                        "profile_index": profile_counter,
+                        "profile_id": (
+                            f"t{int(time_index):02d}_loc{int(location['location_index']):02d}"
+                        ),
+                        "valid_time": None if valid_time is None else str(valid_time),
+                        "latitude": location["latitude"],
+                        "longitude": location["longitude"],
+                        "sample_group": location["sample_group"],
+                        "pressure": np.asarray(pressure.values, dtype=float).tolist(),
+                        "temperature": np.asarray(temperature.values, dtype=float).tolist(),
+                        "specific_humidity": np.asarray(humidity.values, dtype=float).tolist(),
+                        "geopotential": np.asarray(geopotential.values, dtype=float).tolist(),
+                    }
+                )
+                profile_counter += 1
 
     return profiles
 
@@ -310,7 +405,11 @@ def simulate_multi_profile_observations(
             rows.append(
                 {
                     "profile_index": int(profile["profile_index"]),
+                    "profile_id": profile["profile_id"],
                     "valid_time": profile["valid_time"],
+                    "latitude": profile["latitude"],
+                    "longitude": profile["longitude"],
+                    "sample_group": profile["sample_group"],
                     "frequency_ghz": channel.frequency_hz / 1e9,
                     "tb_true_k": float(tb_true[channel_index, 0]),
                     "tb_obs_k": float(tb_obs[channel_index, 0]),
@@ -344,7 +443,11 @@ def simulate_multi_profile_temperature_sensitivity(
             rows.append(
                 {
                     "profile_index": int(profile["profile_index"]),
+                    "profile_id": profile["profile_id"],
                     "valid_time": profile["valid_time"],
+                    "latitude": profile["latitude"],
+                    "longitude": profile["longitude"],
+                    "sample_group": profile["sample_group"],
                     "frequency_ghz": channel.frequency_hz / 1e9,
                     "tb_base_k": float(results["y_base"][channel_index, 0]),
                     "tb_warm_k": float(results["y_warm"][channel_index, 0]),
@@ -385,7 +488,11 @@ def simulate_multi_profile_layer_temperature_sensitivity(
             rows.append(
                 {
                     "profile_index": int(profile["profile_index"]),
+                    "profile_id": profile["profile_id"],
                     "valid_time": profile["valid_time"],
+                    "latitude": profile["latitude"],
+                    "longitude": profile["longitude"],
+                    "sample_group": profile["sample_group"],
                     "frequency_ghz": channel.frequency_hz / 1e9,
                     "tb_base_k": float(results["y_base"][channel_index, 0]),
                     "dTb_lower_k": float(results["dTb_lower"][channel_index, 0]),
@@ -393,6 +500,48 @@ def simulate_multi_profile_layer_temperature_sensitivity(
                     "nedt_k": channel.nedt_k,
                     "lower_ratio": float(results["lower_ratio"][channel_index, 0]),
                     "upper_ratio": float(results["upper_ratio"][channel_index, 0]),
+                    **metadata,
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+def simulate_multi_profile_humidity_sensitivity(
+    path: Path,
+    instrument: InstrumentConfig,
+    n_profiles: int,
+    relative_humidity_change: float,
+) -> pd.DataFrame:
+    rows: list[dict[str, object]] = []
+    for profile in load_era5_arts_profiles(path, n_profiles):
+        pressure, temperature, altitude, _, vmr_h2o, _ = prepare_arts_profile(profile)
+        metadata = profile_metadata_row(temperature, vmr_h2o)
+        results = run_humidity_perturbation_sensitivity(
+            pressure,
+            temperature,
+            altitude,
+            instrument,
+            vmr_h2o=vmr_h2o,
+            relative_humidity_change=relative_humidity_change,
+        )
+        for channel_index, channel in enumerate(instrument.channels):
+            rows.append(
+                {
+                    "profile_index": int(profile["profile_index"]),
+                    "profile_id": profile["profile_id"],
+                    "valid_time": profile["valid_time"],
+                    "latitude": profile["latitude"],
+                    "longitude": profile["longitude"],
+                    "sample_group": profile["sample_group"],
+                    "frequency_ghz": channel.frequency_hz / 1e9,
+                    "tb_base_k": float(results["y_base"][channel_index, 0]),
+                    "tb_humid_k": float(results["y_humid"][channel_index, 0]),
+                    "tb_dry_k": float(results["y_dry"][channel_index, 0]),
+                    "dTb_humid_k": float(results["dTb_humid"][channel_index, 0]),
+                    "dTb_dry_k": float(results["dTb_dry"][channel_index, 0]),
+                    "nedt_k": channel.nedt_k,
+                    "humid_ratio": float(results["humid_ratio"][channel_index, 0]),
+                    "dry_ratio": float(results["dry_ratio"][channel_index, 0]),
                     **metadata,
                 }
             )
@@ -447,6 +596,22 @@ def multi_profile_layer_temperature_sensitivity_summary(
     return grouped
 
 
+def multi_profile_humidity_sensitivity_summary(results: pd.DataFrame) -> pd.DataFrame:
+    grouped = (
+        results.groupby("frequency_ghz", as_index=False)
+        .agg(
+            mean_dtb_humid_k=("dTb_humid_k", "mean"),
+            mean_dtb_dry_k=("dTb_dry_k", "mean"),
+            mean_humid_ratio=("humid_ratio", "mean"),
+            mean_dry_ratio=("dry_ratio", "mean"),
+            std_humid_ratio=("humid_ratio", lambda values: float(values.std(ddof=0))),
+            std_dry_ratio=("dry_ratio", lambda values: float(values.std(ddof=0))),
+        )
+        .sort_values("frequency_ghz")
+    )
+    return grouped
+
+
 def multi_profile_sensitivity_stability_summary(
     temperature_results: pd.DataFrame, layer_results: pd.DataFrame
 ) -> pd.DataFrame:
@@ -479,7 +644,10 @@ def multi_profile_sensitivity_stability_summary(
 
 def multi_profile_diversity_summary(results: pd.DataFrame) -> pd.DataFrame:
     grouped = (
-        results.groupby(["profile_index", "valid_time"], as_index=False)
+        results.groupby(
+            ["profile_index", "profile_id", "valid_time", "latitude", "longitude"],
+            as_index=False,
+        )
         .agg(
             surface_temperature_k=("surface_temperature_k", "first"),
             min_temperature_k=("min_temperature_k", "first"),
@@ -732,8 +900,18 @@ def print_multi_profile_summary(results: pd.DataFrame) -> None:
     selected_valid_times = [
         value for value in results["valid_time"].drop_duplicates().tolist() if value is not None
     ]
+    selected_locations = (
+        results[["latitude", "longitude"]]
+        .drop_duplicates()
+        .sort_values(["latitude", "longitude"])
+        .values.tolist()
+    )
     if selected_valid_times:
         print(f"Selected valid_time values: {selected_valid_times}")
+    if selected_locations:
+        print(f"Selected locations: {selected_locations}")
+    print(f"Selected times: {len(selected_valid_times) if selected_valid_times else 1}")
+    print(f"Selected locations count: {len(selected_locations) if selected_locations else 1}")
     print(f"Profiles simulated: {results['profile_index'].nunique()}")
     print(f"Rows in DataFrame: {len(results)}")
     print(
@@ -742,6 +920,10 @@ def print_multi_profile_summary(results: pd.DataFrame) -> None:
     print(
         "Temperature-profile range across selected profiles: "
         f"{results['min_temperature_k'].min():.1f}-{results['max_temperature_k'].max():.1f} K"
+    )
+    print(
+        "H2O VMR range across selected profiles: "
+        f"{results['min_h2o_vmr'].min():.3e}-{results['max_h2o_vmr'].max():.3e}"
     )
     print(
         f"Noise mean/std: {results['noise_k'].mean():+.3f}/{results['noise_k'].std(ddof=0):.3f} K"
@@ -753,7 +935,7 @@ def print_multi_profile_diversity_summary(summary: pd.DataFrame) -> None:
     print("Profile | valid_time | surface T | min T | max T | max H2O VMR | Tb min | Tb max")
     for row in summary.itertuples(index=False):
         print(
-            f"{row.profile_index} | {row.valid_time} | "
+            f"{row.profile_id} | {row.valid_time} | "
             f"{row.surface_temperature_k:.1f} K | {row.min_temperature_k:.1f} K | "
             f"{row.max_temperature_k:.1f} K | {row.max_h2o_vmr:.3e} | "
             f"{row.tb_min_k:.1f} K | {row.tb_max_k:.1f} K"
@@ -832,6 +1014,38 @@ def print_multi_profile_layer_temperature_sensitivity_summary(
     )
     print(
         f"Profiles in layer-sensitivity batch: {results['profile_index'].nunique()}, "
+        f"rows: {len(results)}"
+    )
+
+
+def print_multi_profile_humidity_sensitivity_summary(
+    results: pd.DataFrame, summary: pd.DataFrame
+) -> None:
+    print("Multi-profile humidity sensitivity summary:")
+    print(
+        "Frequency | Mean dTb_humid | Mean dTb_dry | "
+        "Mean humid_ratio | Mean dry_ratio | Std humid_ratio | Std dry_ratio"
+    )
+    for row in summary.itertuples(index=False):
+        print(
+            f"{row.frequency_ghz:.1f} GHz | {row.mean_dtb_humid_k:+.3f} K | "
+            f"{row.mean_dtb_dry_k:+.3f} K | {row.mean_humid_ratio:.3f} | "
+            f"{row.mean_dry_ratio:.3f} | {row.std_humid_ratio:.3f} | "
+            f"{row.std_dry_ratio:.3f}"
+        )
+    strongest_humid = summary.loc[summary["mean_humid_ratio"].idxmax()]
+    print(
+        "Humidity sensitivity interpretation: "
+        f"{strongest_humid['frequency_ghz']:.1f} GHz shows the largest mean "
+        "|dTb| / NEΔT response to a +/-10% H2O perturbation in this clear-sky sample."
+    )
+    print(
+        "This is still a first-order observation-space diagnostic. It suggests whether "
+        "the current channel set responds measurably to humidity under the clear-sky "
+        "assumption, but it does not quantify vertical humidity sensitivity or retrieval value."
+    )
+    print(
+        f"Profiles in humidity-sensitivity batch: {results['profile_index'].nunique()}, "
         f"rows: {len(results)}"
     )
 
@@ -1012,6 +1226,19 @@ def main() -> None:
             multi_profile_layer_temperature_sensitivity_results
         )
     )
+    multi_profile_humidity_sensitivity_results = (
+        simulate_multi_profile_humidity_sensitivity(
+            path,
+            baseline_instrument,
+            N_MULTI_PROFILES,
+            HUMIDITY_PERTURBATION_FRACTION,
+        )
+    )
+    multi_profile_humidity_sensitivity_grouped = (
+        multi_profile_humidity_sensitivity_summary(
+            multi_profile_humidity_sensitivity_results
+        )
+    )
     multi_profile_sensitivity_stability_results = (
         multi_profile_sensitivity_stability_summary(
             multi_profile_temperature_sensitivity_results,
@@ -1033,6 +1260,11 @@ def main() -> None:
         save_experiment_dataframe(
             multi_profile_layer_temperature_sensitivity_results,
             EXPERIMENT_OUTPUT_DIR / "multi_profile_layer_sensitivity.csv",
+            OVERWRITE_EXPERIMENT_OUTPUTS,
+        ),
+        save_experiment_dataframe(
+            multi_profile_humidity_sensitivity_results,
+            EXPERIMENT_OUTPUT_DIR / "multi_profile_humidity_sensitivity.csv",
             OVERWRITE_EXPERIMENT_OUTPUTS,
         ),
     ]
@@ -1092,6 +1324,31 @@ def main() -> None:
     assert len(multi_profile_layer_temperature_sensitivity_grouped) == len(
         baseline_instrument.channels
     )
+    assert (
+        multi_profile_humidity_sensitivity_results["profile_index"].nunique()
+        == selected_profile_count
+    )
+    assert len(multi_profile_humidity_sensitivity_results) == (
+        selected_profile_count * len(baseline_instrument.channels)
+    )
+    assert np.all(
+        np.isfinite(multi_profile_humidity_sensitivity_results["tb_base_k"])
+    )
+    assert np.all(
+        np.isfinite(multi_profile_humidity_sensitivity_results["tb_humid_k"])
+    )
+    assert np.all(np.isfinite(multi_profile_humidity_sensitivity_results["tb_dry_k"]))
+    assert np.all(
+        np.isfinite(multi_profile_humidity_sensitivity_results["dTb_humid_k"])
+    )
+    assert np.all(np.isfinite(multi_profile_humidity_sensitivity_results["dTb_dry_k"]))
+    assert np.all(
+        np.isfinite(multi_profile_humidity_sensitivity_results["humid_ratio"])
+    )
+    assert np.all(np.isfinite(multi_profile_humidity_sensitivity_results["dry_ratio"]))
+    assert len(multi_profile_humidity_sensitivity_grouped) == len(
+        baseline_instrument.channels
+    )
     assert len(multi_profile_sensitivity_stability_results) == len(
         baseline_instrument.channels
     )
@@ -1143,6 +1400,10 @@ def main() -> None:
     print_multi_profile_layer_temperature_sensitivity_summary(
         multi_profile_layer_temperature_sensitivity_results,
         multi_profile_layer_temperature_sensitivity_grouped,
+    )
+    print_multi_profile_humidity_sensitivity_summary(
+        multi_profile_humidity_sensitivity_results,
+        multi_profile_humidity_sensitivity_grouped,
     )
     print_multi_profile_sensitivity_stability_summary(
         multi_profile_sensitivity_stability_results, selected_profile_count

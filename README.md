@@ -88,6 +88,8 @@ The validated project state currently includes:
 - Synthetic noisy observations generated from brightness temperatures with deterministic, profile-specific random seeds.
 - Uniform atmospheric temperature sensitivity diagnostics.
 - Lower-atmosphere and upper-atmosphere temperature sensitivity diagnostics based on simple pressure-threshold perturbations.
+- Controlled humidity sensitivity diagnostics based on `+10%` and `-10%` H2O VMR perturbations.
+- Observation-space humidity sensitivity ratios relative to channel NEΔT.
 - Small multi-profile experiment tables stored as CSV outputs.
 - Basic diagnostic plotting from those CSV outputs.
 
@@ -113,6 +115,7 @@ The ERA5 smoke-test script currently exercises:
 - instrument-aware noisy observations,
 - temperature perturbation diagnostics,
 - lower-versus-upper atmosphere sensitivity diagnostics, and
+- controlled humidity perturbation diagnostics, and
 - small multi-profile experiment output generation.
 
 ## ERA5 Sample Data
@@ -138,6 +141,7 @@ Typical CSV outputs include:
 - `multi_profile_observations.csv`
 - `multi_profile_temperature_sensitivity.csv`
 - `multi_profile_layer_sensitivity.csv`
+- `multi_profile_humidity_sensitivity.csv`
 
 Current diagnostic figures are written to:
 
@@ -148,6 +152,9 @@ Typical diagnostic figures include:
 - `temperature_sensitivity_vs_frequency.png`
 - `sensitivity_to_noise_vs_frequency.png`
 - `layer_sensitivity_ratio_vs_frequency.png`
+- `humidity_sensitivity_ratio_vs_frequency.png`
+
+In the current 3-channel oxygen-band setup, the clear-sky humidity perturbation responses are present but small relative to channel measurement noise in the current regional sample. That is a useful forward-model sensitivity result, but it should not be interpreted as evidence of an operational water-vapor retrieval capability.
 
 ## Current Limitations
 
@@ -173,7 +180,6 @@ The core clear-sky PyARTS setup has been exercised against a small ERA5 sample w
 Reasonable near-term development steps include:
 
 - expand ERA5 profile diversity,
-- add humidity sensitivity experiments,
 - introduce simple retrieval experiments later, and
 - evaluate instrument trade-offs more systematically.
 

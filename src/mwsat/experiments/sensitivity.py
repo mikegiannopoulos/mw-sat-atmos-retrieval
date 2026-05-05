@@ -106,3 +106,58 @@ def layer_temperature_sensitivity(
         "lower_atmosphere_mask": lower_atmosphere_mask,
         "upper_atmosphere_mask": upper_atmosphere_mask,
     }
+
+
+def humidity_perturbation_sensitivity(
+    pressure: np.ndarray,
+    temperature: np.ndarray,
+    altitude: np.ndarray,
+    instrument: InstrumentConfig,
+    vmr_h2o: np.ndarray,
+    relative_humidity_change: float = 0.1,
+) -> dict[str, np.ndarray]:
+    vmr_h2o_humid = vmr_h2o * (1.0 + relative_humidity_change)
+    vmr_h2o_dry = vmr_h2o * (1.0 - relative_humidity_change)
+
+    y_base = simulate_brightness_temperatures(
+        pressure,
+        temperature,
+        altitude,
+        instrument,
+        vmr_h2o=vmr_h2o,
+    )
+    y_humid = simulate_brightness_temperatures(
+        pressure,
+        temperature,
+        altitude,
+        instrument,
+        vmr_h2o=vmr_h2o_humid,
+    )
+    y_dry = simulate_brightness_temperatures(
+        pressure,
+        temperature,
+        altitude,
+        instrument,
+        vmr_h2o=vmr_h2o_dry,
+    )
+
+    dTb_humid = y_humid - y_base
+    dTb_dry = y_dry - y_base
+    nedt = np.array([channel.nedt_k for channel in instrument.channels]).reshape(
+        y_base.shape
+    )
+    humid_ratio = np.abs(dTb_humid) / nedt
+    dry_ratio = np.abs(dTb_dry) / nedt
+
+    return {
+        "y_base": y_base,
+        "y_humid": y_humid,
+        "y_dry": y_dry,
+        "dTb_humid": dTb_humid,
+        "dTb_dry": dTb_dry,
+        "nedt": nedt,
+        "humid_ratio": humid_ratio,
+        "dry_ratio": dry_ratio,
+        "vmr_h2o_humid": vmr_h2o_humid,
+        "vmr_h2o_dry": vmr_h2o_dry,
+    }

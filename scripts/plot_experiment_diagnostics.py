@@ -12,12 +12,14 @@ OUTPUT_DIR = PROJECT_ROOT / "reports" / "figures" / "experiments"
 
 TEMPERATURE_SENSITIVITY_CSV = INPUT_DIR / "multi_profile_temperature_sensitivity.csv"
 LAYER_SENSITIVITY_CSV = INPUT_DIR / "multi_profile_layer_sensitivity.csv"
+HUMIDITY_SENSITIVITY_CSV = INPUT_DIR / "multi_profile_humidity_sensitivity.csv"
 
 
-def load_inputs() -> tuple[pd.DataFrame, pd.DataFrame]:
+def load_inputs() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     temperature_sensitivity = pd.read_csv(TEMPERATURE_SENSITIVITY_CSV)
     layer_sensitivity = pd.read_csv(LAYER_SENSITIVITY_CSV)
-    return temperature_sensitivity, layer_sensitivity
+    humidity_sensitivity = pd.read_csv(HUMIDITY_SENSITIVITY_CSV)
+    return temperature_sensitivity, layer_sensitivity, humidity_sensitivity
 
 
 def save_temperature_sensitivity_plot(
@@ -103,14 +105,50 @@ def save_layer_sensitivity_ratio_plot(layer_sensitivity: pd.DataFrame) -> Path:
     return output_path
 
 
+def save_humidity_sensitivity_ratio_plot(humidity_sensitivity: pd.DataFrame) -> Path:
+    output_path = OUTPUT_DIR / "humidity_sensitivity_ratio_vs_frequency.png"
+    summary = (
+        humidity_sensitivity.groupby("frequency_ghz", as_index=False)
+        .agg(
+            mean_humid_ratio=("humid_ratio", "mean"),
+            mean_dry_ratio=("dry_ratio", "mean"),
+        )
+        .sort_values("frequency_ghz")
+    )
+
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+    ax.plot(
+        summary["frequency_ghz"],
+        summary["mean_humid_ratio"],
+        marker="o",
+        label="Mean humid_ratio",
+    )
+    ax.plot(
+        summary["frequency_ghz"],
+        summary["mean_dry_ratio"],
+        marker="o",
+        label="Mean dry_ratio",
+    )
+    ax.set_title("Humidity Sensitivity Ratio vs Frequency")
+    ax.set_xlabel("Frequency (GHz)")
+    ax.set_ylabel("Ratio")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=150)
+    plt.close(fig)
+    return output_path
+
+
 def main() -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    temperature_sensitivity, layer_sensitivity = load_inputs()
+    temperature_sensitivity, layer_sensitivity, humidity_sensitivity = load_inputs()
 
     output_paths = [
         save_temperature_sensitivity_plot(temperature_sensitivity),
         save_sensitivity_to_noise_plot(temperature_sensitivity),
         save_layer_sensitivity_ratio_plot(layer_sensitivity),
+        save_humidity_sensitivity_ratio_plot(humidity_sensitivity),
     ]
 
     for output_path in output_paths:
