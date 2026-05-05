@@ -83,7 +83,7 @@ def load_era5_arts_profile(path: Path) -> dict[str, list[float]]:
 
 def prepare_arts_profile(
     profile: dict,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, str]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, str]:
     pressure = np.asarray(profile["pressure"], dtype=float)
     temperature = np.asarray(profile["temperature"], dtype=float)
     humidity = np.asarray(profile["specific_humidity"], dtype=float)
@@ -98,11 +98,12 @@ def prepare_arts_profile(
     humidity = humidity[order]
     geopotential = geopotential[order]
     altitude = geopotential / GRAVITY
+    vmr_h2o = humidity / (1.0 - humidity)
     altitude_source = "ERA5 geopotential / 9.80665"
 
-    validate_arts_profile_inputs(pressure, temperature, altitude, humidity)
+    validate_arts_profile_inputs(pressure, temperature, altitude, humidity, vmr_h2o)
 
-    return pressure, temperature, altitude, humidity, altitude_source
+    return pressure, temperature, altitude, humidity, vmr_h2o, altitude_source
 
 
 def validate_arts_profile_inputs(
@@ -110,6 +111,7 @@ def validate_arts_profile_inputs(
     temperature: np.ndarray,
     altitude: np.ndarray,
     humidity: np.ndarray,
+    vmr_h2o: np.ndarray,
 ) -> None:
     assert np.all(np.isfinite(pressure))
     assert np.all(pressure > 0.0)
@@ -119,12 +121,16 @@ def validate_arts_profile_inputs(
     assert np.all(np.diff(altitude) > 0.0)
     assert np.all(np.isfinite(humidity))
     assert np.all(humidity >= 0.0)
+    assert np.all(np.isfinite(vmr_h2o))
+    assert np.all(vmr_h2o >= 0.0)
+    assert np.all(vmr_h2o < 0.05)
 
 
 def build_workspace(
     pressure: np.ndarray,
     temperature: np.ndarray,
     altitude: np.ndarray,
+    vmr_h2o: np.ndarray | None = None,
 ) -> Workspace:
     ws = Workspace()
 
@@ -142,8 +148,18 @@ def build_workspace(
     ws.sensor_los = np.array([[180.0]])
     ws.sensor_checkedCalc()
 
-    ws.abs_speciesSet(species=["O2-PWR98"])
-    ws.vmr_field = np.full((1, len(ws.p_grid.value), 1, 1), 0.21)
+    if vmr_h2o is None:
+        ws.abs_speciesSet(species=["O2-PWR98"])
+        ws.vmr_field = np.full((1, len(ws.p_grid.value), 1, 1), 0.21)
+    else:
+        ws.abs_speciesSet(species=["O2-PWR98", "H2O-PWR98"])
+        ws.vmr_field = np.stack(
+            [
+                np.full(len(ws.p_grid.value), 0.21),
+                np.asarray(vmr_h2o, dtype=float),
+            ],
+            axis=0,
+        ).reshape((2, len(ws.p_grid.value), 1, 1))
     ws.cloudbox_on = 0
     ws.jacobianOff()
     ws.cloudboxOff()
@@ -207,6 +223,7 @@ def print_profile_summary(
     temperature: np.ndarray,
     altitude: np.ndarray,
     humidity: np.ndarray,
+    vmr_h2o: np.ndarray,
     altitude_source: str,
 ) -> None:
     print(f"Pressure range: {pressure.min():.0f}-{pressure.max():.0f} Pa")
@@ -216,12 +233,26 @@ def print_profile_summary(
         f"{altitude.min():.0f}-{altitude.max():.0f} m ({altitude_source})"
     )
     print(f"Specific humidity range: {humidity.min():.3e}-{humidity.max():.3e} kg/kg")
+    print(f"H2O VMR range: {vmr_h2o.min():.3e}-{vmr_h2o.max():.3e}")
 
 
 def print_brightness_temperatures(y: np.ndarray) -> None:
     print("Brightness temperatures:")
     for frequency_hz, brightness_temperature in zip(FREQUENCIES_HZ, y[:, 0]):
         print(f"{frequency_hz / 1e9:.1f} GHz -> {brightness_temperature:.1f} K")
+
+
+def print_brightness_temperature_comparison(
+    y_o2_only: np.ndarray, y_o2_h2o: np.ndarray
+) -> None:
+    print("Brightness temperatures comparison:")
+    for frequency_hz, bt_o2_only, bt_o2_h2o in zip(
+        FREQUENCIES_HZ, y_o2_only[:, 0], y_o2_h2o[:, 0]
+    ):
+        print(
+            f"{frequency_hz / 1e9:.1f} GHz -> "
+            f"O2-only {bt_o2_only:.1f} K, O2+H2O {bt_o2_h2o:.1f} K"
+        )
 
 
 def print_summary() -> None:
@@ -237,17 +268,24 @@ def main() -> None:
 
     metadata = first_profile_metadata(path)
     profile = load_era5_arts_profile(path)
-    pressure, temperature, altitude, humidity, altitude_source = prepare_arts_profile(
-        profile
+    pressure, temperature, altitude, humidity, vmr_h2o, altitude_source = (
+        prepare_arts_profile(profile)
     )
 
-    ws = build_workspace(pressure, temperature, altitude)
-    y = run_ycalc(ws)
-    validate_brightness_temperatures(y, len(FREQUENCIES_HZ))
+    ws_o2_only = build_workspace(pressure, temperature, altitude)
+    y_o2_only = run_ycalc(ws_o2_only)
+    validate_brightness_temperatures(y_o2_only, len(FREQUENCIES_HZ))
+
+    ws_o2_h2o = build_workspace(pressure, temperature, altitude, vmr_h2o=vmr_h2o)
+    y_o2_h2o = run_ycalc(ws_o2_h2o)
+    validate_brightness_temperatures(y_o2_h2o, len(FREQUENCIES_HZ))
 
     print_metadata(metadata)
-    print_profile_summary(pressure, temperature, altitude, humidity, altitude_source)
-    print_brightness_temperatures(y)
+    print_profile_summary(
+        pressure, temperature, altitude, humidity, vmr_h2o, altitude_source
+    )
+    print_brightness_temperatures(y_o2_h2o)
+    print_brightness_temperature_comparison(y_o2_only, y_o2_h2o)
     print_summary()
 
 
