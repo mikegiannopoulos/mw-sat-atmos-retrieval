@@ -91,6 +91,10 @@ The validated project state currently includes:
 - Controlled humidity sensitivity diagnostics based on `+10%` and `-10%` H2O VMR perturbations.
 - Observation-space humidity sensitivity ratios relative to channel NEΔT.
 - Small multi-profile experiment tables stored as CSV outputs.
+- A first scalar retrieval experiment for lower-layer mean temperature using noisy brightness temperatures as inputs.
+- Simple retrieval-model comparison with a mean baseline, linear regression, and ridge regression.
+- Channel-removal and degraded-noise retrieval trade-off checks.
+- Synthetic-profile out-of-distribution retrieval stress testing.
 - Basic diagnostic plotting from those CSV outputs.
 
 ## PyARTS Validation Scripts
@@ -152,6 +156,7 @@ Typical CSV outputs include:
 - `multi_profile_temperature_sensitivity.csv`
 - `multi_profile_layer_sensitivity.csv`
 - `multi_profile_humidity_sensitivity.csv`
+- `linear_retrieval_results.csv`
 
 Current diagnostic figures are written to:
 
@@ -163,6 +168,7 @@ Typical diagnostic figures include:
 - `sensitivity_to_noise_vs_frequency.png`
 - `layer_sensitivity_ratio_vs_frequency.png`
 - `humidity_sensitivity_ratio_vs_frequency.png`
+- `linear_retrieval_rmse_by_channel_set.png`
 
 In the current 3-channel oxygen-band setup, the clear-sky humidity perturbation responses are present but small relative to channel measurement noise in the current regional sample. That is a useful forward-model sensitivity result, but it should not be interpreted as evidence of an operational water-vapor retrieval capability.
 
@@ -179,6 +185,18 @@ The present workflow is intentionally limited:
 
 The current diagnostics are useful for controlled forward-model checks, but they should not be interpreted as complete retrieval-value metrics.
 
+## First Retrieval Experiment
+
+The repository now includes a first minimal retrieval experiment designed to connect the instrument configuration to a simple retrieval-performance metric.
+
+- retrieval target: lower-layer mean temperature using the atmospheric layer with pressure `>= 700 hPa`,
+- inputs: the three noisy channel brightness temperatures,
+- models: mean baseline, linear regression, and ridge regression,
+- trade-off cases: full 3-channel setup, leave-one-channel-out cases, and baseline versus degraded NEΔT, and
+- stress test: train on ERA5-derived profiles and evaluate synthetic profiles separately as out-of-distribution cases.
+
+This is intentionally a controlled scalar proxy retrieval rather than a full atmospheric retrieval system. It is useful for testing whether the current channels carry practical lower-layer temperature information, but it does not retrieve a full temperature profile and should not be interpreted as an operational retrieval framework.
+
 ## Current Project Status
 
 The project is now in a validated early forward-model stage.
@@ -187,12 +205,14 @@ The core clear-sky PyARTS setup has been exercised against a small ERA5 sample w
 
 Within the current regional ERA5 sample, the main channel-sensitivity patterns are fairly stable. The synthetic stress tests show that some regime dependence is already visible, however: warm/moist conditions can shift the strongest uniform temperature sensitivity toward `54.4 GHz`, and cold/dry conditions can slightly shift lower-layer sensitivity toward `50.3 GHz`. The humidity response also increases in the moist synthetic case, but it remains below the measurement-noise scale in this simple 3-channel setup. These are useful sensitivity-analysis results, but they should not be interpreted as evidence of global robustness or retrieval capability.
 
+The first scalar retrieval experiment is consistent with that picture. Linear regression and ridge regression improve on a mean baseline for lower-layer mean temperature within the narrow ERA5-derived sample, and removing `52.8 GHz` tends to hurt performance most. Synthetic-profile evaluation is much harder than the in-sample ERA5 cross-validation case, which reinforces that the current setup should be treated as a controlled retrieval prototype rather than a robust atmospheric retrieval system.
+
 ## Next Steps
 
 Reasonable near-term development steps include:
 
 - expand ERA5 profile diversity,
-- introduce simple retrieval experiments later, and
+- extend retrieval experiments carefully beyond the first scalar target, and
 - evaluate instrument trade-offs more systematically.
 
 ## Planned Roadmap

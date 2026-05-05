@@ -501,13 +501,17 @@ def channel_signal_to_noise_proxy(
 
 
 def profile_metadata_row(
-    temperature: np.ndarray, vmr_h2o: np.ndarray
+    pressure: np.ndarray, temperature: np.ndarray, vmr_h2o: np.ndarray
 ) -> dict[str, float]:
+    lower_layer_mask = pressure >= LOWER_ATMOSPHERE_PRESSURE_THRESHOLD_PA
+    upper_layer_mask = pressure <= UPPER_ATMOSPHERE_PRESSURE_THRESHOLD_PA
     return {
         "surface_temperature_k": float(temperature[0]),
         "min_temperature_k": float(temperature.min()),
         "max_temperature_k": float(temperature.max()),
         "mean_temperature_k": float(temperature.mean()),
+        "lower_layer_mean_temperature_k": float(temperature[lower_layer_mask].mean()),
+        "upper_layer_mean_temperature_k": float(temperature[upper_layer_mask].mean()),
         "min_h2o_vmr": float(vmr_h2o.min()),
         "max_h2o_vmr": float(vmr_h2o.max()),
     }
@@ -519,7 +523,7 @@ def simulate_multi_profile_observations(
     rows: list[dict[str, object]] = []
     for profile in load_era5_arts_profiles(path, n_profiles):
         pressure, temperature, altitude, _, vmr_h2o, _ = prepare_arts_profile(profile)
-        metadata = profile_metadata_row(temperature, vmr_h2o)
+        metadata = profile_metadata_row(pressure, temperature, vmr_h2o)
         tb_true = simulate_brightness_temperatures(
             pressure, temperature, altitude, instrument, vmr_h2o=vmr_h2o
         )
@@ -555,7 +559,7 @@ def simulate_multi_profile_temperature_sensitivity(
     rows: list[dict[str, object]] = []
     for profile in load_era5_arts_profiles(path, n_profiles):
         pressure, temperature, altitude, _, vmr_h2o, _ = prepare_arts_profile(profile)
-        metadata = profile_metadata_row(temperature, vmr_h2o)
+        metadata = profile_metadata_row(pressure, temperature, vmr_h2o)
         results = run_temperature_perturbation_sensitivity(
             pressure,
             temperature,
@@ -599,7 +603,7 @@ def simulate_multi_profile_layer_temperature_sensitivity(
     rows: list[dict[str, object]] = []
     for profile in load_era5_arts_profiles(path, n_profiles):
         pressure, temperature, altitude, _, vmr_h2o, _ = prepare_arts_profile(profile)
-        metadata = profile_metadata_row(temperature, vmr_h2o)
+        metadata = profile_metadata_row(pressure, temperature, vmr_h2o)
         results = run_layer_temperature_sensitivity(
             pressure,
             temperature,
@@ -642,7 +646,7 @@ def simulate_multi_profile_humidity_sensitivity(
     rows: list[dict[str, object]] = []
     for profile in load_era5_arts_profiles(path, n_profiles):
         pressure, temperature, altitude, _, vmr_h2o, _ = prepare_arts_profile(profile)
-        metadata = profile_metadata_row(temperature, vmr_h2o)
+        metadata = profile_metadata_row(pressure, temperature, vmr_h2o)
         results = run_humidity_perturbation_sensitivity(
             pressure,
             temperature,
