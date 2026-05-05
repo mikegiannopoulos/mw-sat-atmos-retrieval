@@ -2,41 +2,39 @@
 
 ## Overview
 
-`mw-sat-atmos-retrieval` is a research-oriented Python project focused on simulating microwave satellite observations of the atmosphere and investigating how instrument characteristics influence atmospheric temperature retrieval accuracy.
+`mw-sat-atmos-retrieval` is a research-oriented Python project for simulating microwave satellite observations of the atmosphere and studying how instrument assumptions influence those observations.
 
-The project is centered on three connected components: forward simulation of microwave radiances, representation of instrument characteristics, and evaluation of how those characteristics influence retrieval performance. The overall aim is to support controlled, reproducible studies of temperature sounding in a modular scientific workflow designed for controlled numerical experimentation.
+The current validated workflow is a forward-model and sensitivity-analysis pipeline built around:
 
-ARTS/PyARTS is being introduced as the main radiative transfer framework. The current validated ARTS work lives in standalone scripts while the package-level backend remains a scaffold. The initial scope is clear-sky oxygen-band temperature sounding, with the codebase structured so that later extensions can be added without redesigning the project.
+- ERA5 pressure-level atmospheric profiles,
+- clear-sky PyARTS forward simulation,
+- simple instrument channel and noise assumptions, and
+- small controlled perturbation experiments.
 
-## Main Objective
+The longer-term goal is to support retrieval and instrument trade-off studies, but the repository should not currently be interpreted as a complete retrieval system.
 
-The main objective of this project is to investigate how instrument characteristics affect atmospheric temperature retrieval accuracy.
+## Project Goal
 
-This will be done through controlled numerical experiments in which atmospheric states, forward-model assumptions, and retrieval settings can be held fixed while instrument parameters are varied systematically. Examples of such parameters may include channel selection, spectral configuration, noise assumptions, and vertical sensitivity characteristics.
+The project is intended to support reproducible studies of:
 
-The project is intended to provide a reproducible environment for testing how sensor design choices influence retrieval quality under clearly defined conditions.
+- microwave satellite observation simulation,
+- instrument-aware sensitivity analysis, and
+- eventual retrieval and instrument trade-off experiments.
+
+At the current stage, the emphasis is on building a scientifically cautious forward-modeling foundation before adding more advanced retrieval components.
 
 ## High-Level Workflow
 
-The project is organized around the following high-level pipeline:
+The project is organized around the following conceptual pipeline:
 
-1. **Atmospheric data preparation**  
-   Prepare atmospheric profiles and supporting inputs from external datasets and intermediate preprocessing steps.
+1. Atmospheric data preparation
+2. Forward simulation with ARTS/PyARTS
+3. Instrument modeling
+4. Sensitivity diagnostics
+5. Later retrieval experiments
+6. Evaluation and visualization
 
-2. **Forward simulation with ARTS/PyARTS**  
-   Use ARTS/PyARTS to simulate microwave observations from prescribed atmospheric states under controlled conditions.
-
-3. **Instrument modeling**  
-   Apply instrument-related assumptions such as channel configuration, noise, and simplified sensor response characteristics.
-
-4. **Retrieval**  
-   Estimate atmospheric temperature profiles from simulated observations using retrieval methods implemented within the project.
-
-5. **Evaluation**  
-   Compare retrieved profiles against reference states and quantify retrieval accuracy, sensitivity, and error characteristics.
-
-6. **Visualization**  
-   Produce figures and diagnostics to summarize experiment design, simulated observations, and retrieval performance.
+Only the forward-model and sensitivity-analysis parts are currently validated in a meaningful way.
 
 ## Repository Structure
 
@@ -45,10 +43,6 @@ mw-sat-atmos-retrieval/
 ├── configs/
 ├── data/
 │   ├── raw/
-│   │   ├── era5/
-│   │   ├── igra/
-│   │   ├── atms/
-│   │   └── chalmers_scattering/
 │   ├── interim/
 │   └── processed/
 ├── docs/
@@ -58,16 +52,17 @@ mw-sat-atmos-retrieval/
 ├── scripts/
 ├── src/
 │   └── mwsat/
-│       ├── io/
-│       ├── profiles/
+│       ├── evaluation/
+│       ├── experiments/
 │       ├── forward/
 │       ├── instrument/
-│       ├── retrieval/
-│       ├── evaluation/
+│       ├── io/
+│       ├── pipeline/
 │       ├── plotting/
+│       ├── profiles/
+│       ├── retrieval/
 │       └── utils/
 ├── tests/
-├── .gitignore
 ├── environment.yml
 ├── pyproject.toml
 └── README.md
@@ -82,22 +77,23 @@ conda env create -f environment.yml
 conda activate mwsat
 ```
 
-## Current Demo Workflow
+## Current Capabilities
 
-The current pipeline can be exercised with a small generated ERA5-like NetCDF file that serves as a placeholder input for development and testing.
+The validated project state currently includes:
 
-```bash
-python scripts/create_dummy_era5.py
-python scripts/run_experiment_summary.py
-```
-
-This currently runs configuration loading, ERA5-like profile ingestion, mock forward simulation, baseline retrieval, and metric aggregation.
-
-The package-level forward model and retrieval components are still placeholders intended to support pipeline development. They will later be replaced or extended with the validated ARTS/PyARTS setup and more realistic retrieval methods.
+- ERA5 pressure-level profile ingestion for temperature, specific humidity, and geopotential.
+- PyARTS clear-sky forward simulation with `O2-PWR98` and `H2O-PWR98`.
+- Conversion of ERA5 specific humidity into H2O volume mixing ratio for ARTS input.
+- A reusable `InstrumentConfig` representation with channels and per-channel NEΔT values.
+- Synthetic noisy observations generated from brightness temperatures with deterministic, profile-specific random seeds.
+- Uniform atmospheric temperature sensitivity diagnostics.
+- Lower-atmosphere and upper-atmosphere temperature sensitivity diagnostics based on simple pressure-threshold perturbations.
+- Small multi-profile experiment tables stored as CSV outputs.
+- Basic diagnostic plotting from those CSV outputs.
 
 ## PyARTS Validation Scripts
 
-The repository includes standalone PyARTS smoke tests for the current clear-sky forward-model work. These scripts are intentionally kept outside the package until the workflow is ready to be promoted into reusable production code.
+The repository includes standalone PyARTS smoke tests for the current clear-sky forward-model work.
 
 Run the controlled synthetic validation:
 
@@ -105,67 +101,90 @@ Run the controlled synthetic validation:
 conda run -n mwsat python scripts/test_arts_minimal.py
 ```
 
-This validates a minimal clear-sky O2-band ARTS setup using `O2-PWR98`, `iy_unit = "PlanckBT"`, a blackbody surface, and three channels at 50.3, 52.8, and 54.4 GHz. It checks baseline brightness temperatures plus uniform atmospheric, surface, lower-layer, and upper-layer temperature perturbations.
-
 Run the ERA5 profile bridge smoke test:
 
 ```bash
 conda run -n mwsat python scripts/test_arts_era5_profile.py
 ```
 
-By default this uses `data/raw/era5/real_era5.nc` if present, otherwise `data/raw/era5/dummy_era5.nc`. You can also pass an explicit NetCDF path:
+The ERA5 smoke-test script currently exercises:
 
-```bash
-conda run -n mwsat python scripts/test_arts_era5_profile.py data/raw/era5/real_era5.nc
-```
-
-The ERA5 script loads one pressure-level temperature profile, prepares ARTS-compatible pressure, temperature, and altitude fields, runs the same clear-sky O2-band setup, and prints profile metadata plus channel brightness temperatures.
+- clear-sky O2 + H2O forward simulation,
+- instrument-aware noisy observations,
+- temperature perturbation diagnostics,
+- lower-versus-upper atmosphere sensitivity diagnostics, and
+- small multi-profile experiment output generation.
 
 ## ERA5 Sample Data
 
-Small ERA5 sample data can be downloaded with the CDS API helper script:
-
-```bash
-python scripts/download_era5_sample.py
-python scripts/run_forward_from_file.py data/raw/era5/real_era5.nc
-```
-
-For the next ARTS-oriented ERA5 smoke tests, download a compact pressure-level sample containing temperature, specific humidity, and geopotential:
+Small ERA5 sample data can be downloaded with:
 
 ```bash
 conda run -n mwsat python scripts/download_era5_arts_sample.py
 ```
 
-The output defaults to `data/raw/era5/arts_era5_sample.nc`. Use `--output` to choose a different path and `--overwrite` to replace an existing file.
+The output defaults to `data/raw/era5/arts_era5_sample.nc`.
 
-CDS API credentials must be configured in `~/.cdsapirc` before download. Downloaded NetCDF files under `data/` are ignored by git and should not be committed.
+Downloaded NetCDF files under `data/` are ignored by git and should not be committed.
+
+## Example Outputs
+
+Current experiment outputs are written to:
+
+- `data/processed/experiments/`
+
+Typical CSV outputs include:
+
+- `multi_profile_observations.csv`
+- `multi_profile_temperature_sensitivity.csv`
+- `multi_profile_layer_sensitivity.csv`
+
+Current diagnostic figures are written to:
+
+- `reports/figures/experiments/`
+
+Typical diagnostic figures include:
+
+- `temperature_sensitivity_vs_frequency.png`
+- `sensitivity_to_noise_vs_frequency.png`
+- `layer_sensitivity_ratio_vs_frequency.png`
+
+## Current Limitations
+
+The present workflow is intentionally limited:
+
+- clear-sky only,
+- no scattering or clouds,
+- no retrievals yet,
+- limited ERA5 sample diversity in the current validation dataset,
+- no formal Jacobians yet, and
+- no full information-content analysis yet.
+
+The current diagnostics are useful for controlled forward-model checks, but they should not be interpreted as complete retrieval-value metrics.
 
 ## Current Project Status
 
-The project is in its initial development phase.
+The project is now in a validated early forward-model stage.
 
-Current work is focused on building the foundation for a research-grade simulation and retrieval framework. This includes establishing the package structure, environment definition, data organization, and the modular components needed to support clear-sky microwave temperature sounding studies.
+The core clear-sky PyARTS setup has been exercised against a small ERA5 sample with O2 + H2O absorption, simple instrument noise, perturbation-based temperature sensitivity diagnostics, multi-profile CSV outputs, and basic plots. This is enough to support controlled forward experiments and small sensitivity studies, but it is still short of a complete retrieval framework.
 
-The minimal ARTS forward model has now passed controlled standalone checks and has been connected to one ERA5 pressure-level profile. The next step is to extend the ERA5 smoke test to use humidity and geopotential from the richer ERA5 sample, then promote the validated setup into the package-level forward backend.
+## Next Steps
 
-At this stage, the repository is intended as a scaffold for reproducible scientific development rather than a completed analysis system.
+Reasonable near-term development steps include:
+
+- expand ERA5 profile diversity,
+- add humidity sensitivity experiments,
+- introduce simple retrieval experiments later, and
+- evaluate instrument trade-offs more systematically.
 
 ## Planned Roadmap
 
-Planned development areas include:
+Planned development areas still include:
 
-- configuration-driven experiment workflows,
-- ingestion and preprocessing of atmospheric input data,
-- integration of ARTS/PyARTS into the forward simulation workflow,
-- implementation of initial temperature retrieval methods,
-- evaluation metrics for retrieval performance and instrument sensitivity,
-- improved visualization and reporting utilities, and
-- testing for reliability and reproducibility.
+- more complete package-level experiment workflows,
+- broader atmospheric input handling,
+- promotion of validated standalone logic into reusable package components where appropriate,
+- initial retrieval methods after the forward and sensitivity pieces are mature enough, and
+- improved evaluation and visualization utilities.
 
-## Future Extensions
-
-Future extensions may include the integration of Chalmers-related cloud and precipitation scattering datasets to support more advanced simulation studies beyond the initial clear-sky focus.
-
-These additions are intended as possible next steps rather than current project capabilities.
-
-This project is intended as a foundation for systematic investigation rather than a finished application.
+This project should currently be understood as a forward-model and sensitivity-analysis pipeline under active development, not as a complete retrieval system.
