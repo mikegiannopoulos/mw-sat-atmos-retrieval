@@ -9,7 +9,7 @@ SRC_DIR = PROJECT_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from mwsat.profiles.era5 import load_era5_profile
+from mwsat.profiles.era5 import load_era5_profile  # noqa: E402
 
 
 def main() -> int:

@@ -50,13 +50,17 @@ def add_degraded_observations(observations: pd.DataFrame) -> pd.DataFrame:
 
 
 def pivot_observations(observations: pd.DataFrame) -> pd.DataFrame:
-    metadata_columns = [
+    candidate_metadata_columns = [
         "profile_index",
         "profile_id",
         "valid_time",
         "latitude",
         "longitude",
         "region_name",
+        "source_name",
+        "climate_regime",
+        "surface_type",
+        "season_label",
         "sample_group",
         "surface_temperature_k",
         "min_temperature_k",
@@ -64,8 +68,14 @@ def pivot_observations(observations: pd.DataFrame) -> pd.DataFrame:
         "mean_temperature_k",
         "lower_layer_mean_temperature_k",
         "upper_layer_mean_temperature_k",
+        "mean_h2o_vmr",
+        "lower_layer_mean_h2o_vmr",
+        "upper_layer_mean_h2o_vmr",
         "min_h2o_vmr",
         "max_h2o_vmr",
+    ]
+    metadata_columns = [
+        column for column in candidate_metadata_columns if column in observations.columns
     ]
     pivot_rows: list[dict[str, object]] = []
     for profile_id, group in observations.groupby("profile_id", sort=True):

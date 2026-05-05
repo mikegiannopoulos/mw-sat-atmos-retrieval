@@ -36,34 +36,151 @@ MULTI_PROFILE_NOISE_BASE_SEED = 100
 TEMPERATURE_PERTURBATION_K = 1.0
 LOWER_ATMOSPHERE_PRESSURE_THRESHOLD_PA = 70000.0
 UPPER_ATMOSPHERE_PRESSURE_THRESHOLD_PA = 30000.0
-N_MULTI_PROFILES = 32
+N_MULTI_PROFILES = 260
 HUMIDITY_PERTURBATION_FRACTION = 0.1
 OVERWRITE_EXPERIMENT_OUTPUTS = True
 EXPERIMENT_OUTPUT_DIR = PROJECT_ROOT / "data" / "processed" / "experiments"
-REGION_SPECS = [
+DEFAULT_LOCATION_GROUP_SPECS = [
     {
         "region_name": "northern_sector_west",
         "center_latitude": 57.95,
         "center_longitude": 10.05,
-        "n_locations": 2,
+        "n_locations": 5,
     },
     {
         "region_name": "northern_sector_east",
         "center_latitude": 57.95,
         "center_longitude": 10.95,
-        "n_locations": 2,
+        "n_locations": 5,
     },
     {
         "region_name": "southern_sector_west",
         "center_latitude": 57.05,
         "center_longitude": 10.05,
-        "n_locations": 2,
+        "n_locations": 5,
     },
     {
         "region_name": "southern_sector_east",
         "center_latitude": 57.05,
         "center_longitude": 10.95,
-        "n_locations": 2,
+        "n_locations": 5,
+    },
+]
+LOWER_LATITUDE_MARITIME_LOCATION_GROUP_SPECS = [
+    {
+        "region_name": "tropical_atlantic_west",
+        "center_latitude": 12.0,
+        "center_longitude": 300.0,
+        "n_locations": 5,
+    },
+    {
+        "region_name": "tropical_atlantic_east",
+        "center_latitude": 12.0,
+        "center_longitude": 308.0,
+        "n_locations": 5,
+    },
+    {
+        "region_name": "subtropical_atlantic_west",
+        "center_latitude": 20.0,
+        "center_longitude": 300.0,
+        "n_locations": 5,
+    },
+    {
+        "region_name": "subtropical_atlantic_east",
+        "center_latitude": 20.0,
+        "center_longitude": 308.0,
+        "n_locations": 5,
+    },
+]
+HIGH_LATITUDE_CONTINENTAL_LOCATION_GROUP_SPECS = [
+    {
+        "region_name": "siberia_west",
+        "center_latitude": 64.0,
+        "center_longitude": 90.0,
+        "n_locations": 5,
+    },
+    {
+        "region_name": "siberia_east",
+        "center_latitude": 64.0,
+        "center_longitude": 98.0,
+        "n_locations": 5,
+    },
+    {
+        "region_name": "arctic_continental_west",
+        "center_latitude": 72.0,
+        "center_longitude": 90.0,
+        "n_locations": 5,
+    },
+    {
+        "region_name": "arctic_continental_east",
+        "center_latitude": 72.0,
+        "center_longitude": 98.0,
+        "n_locations": 5,
+    },
+]
+ERA5_SOURCE_SPECS = [
+    {
+        "source_name": "winter_midlatitude_maritime_sample",
+        "file_name": "arts_era5_sample.nc",
+        "season_label": "winter",
+        "climate_regime": "midlatitude",
+        "surface_type": "maritime",
+        "location_group_specs": DEFAULT_LOCATION_GROUP_SPECS,
+        "max_time_samples": 4,
+    },
+    {
+        "source_name": "winter_midlatitude_maritime_reference",
+        "file_name": "real_era5.nc",
+        "season_label": "winter",
+        "climate_regime": "midlatitude",
+        "surface_type": "maritime",
+        "location_group_specs": DEFAULT_LOCATION_GROUP_SPECS,
+        "max_time_samples": 1,
+    },
+    {
+        "source_name": "summer_lower_latitude_maritime",
+        "file_name": "era5_lower_latitude_summer.nc",
+        "season_label": "summer",
+        "climate_regime": "lower_latitude",
+        "surface_type": "maritime",
+        "location_group_specs": DEFAULT_LOCATION_GROUP_SPECS,
+        "max_time_samples": 4,
+    },
+    {
+        "source_name": "high_latitude_cold_dry",
+        "file_name": "era5_high_latitude_winter.nc",
+        "season_label": "winter",
+        "climate_regime": "high_latitude",
+        "surface_type": "continental",
+        "location_group_specs": DEFAULT_LOCATION_GROUP_SPECS,
+        "max_time_samples": 4,
+    },
+    {
+        "source_name": "midlatitude_continental_transition",
+        "file_name": "era5_midlatitude_transition.nc",
+        "season_label": "transition",
+        "climate_regime": "midlatitude",
+        "surface_type": "continental",
+        "location_group_specs": DEFAULT_LOCATION_GROUP_SPECS,
+        "max_time_samples": 4,
+    },
+    {
+        "source_name": "lower_latitude_maritime_2020",
+        "file_name": "era5_lower_latitude_maritime_2020.nc",
+        "season_label": None,
+        "climate_regime": "lower_latitude",
+        "surface_type": "maritime",
+        "location_group_specs": LOWER_LATITUDE_MARITIME_LOCATION_GROUP_SPECS,
+        "max_time_samples": 5,
+    },
+    {
+        "source_name": "high_latitude_continental_2020",
+        "file_name": "era5_high_latitude_continental_2020.nc",
+        "season_label": "winter",
+        "climate_regime": "high_latitude",
+        "surface_type": "continental",
+        "location_group_specs": HIGH_LATITUDE_CONTINENTAL_LOCATION_GROUP_SPECS,
+        "max_time_samples": 3,
     },
 ]
 SYNTHETIC_PROFILE_SPECS = [
@@ -185,15 +302,61 @@ def select_profile_indices(n_available: int, n_select: int) -> np.ndarray:
     return np.unique(np.round(np.linspace(0, n_available - 1, n_select)).astype(int))
 
 
-def select_time_indices(n_available: int, target_profiles: int) -> np.ndarray:
+def season_label_from_time(time_value: object | None) -> str | None:
+    if time_value is None:
+        return None
+    month = pd.Timestamp(time_value).month
+    if month in (12, 1, 2):
+        return "winter"
+    if month in (3, 4, 5):
+        return "spring"
+    if month in (6, 7, 8):
+        return "summer"
+    return "autumn"
+
+
+def available_era5_source_specs(data_dir: Path) -> tuple[list[dict[str, object]], list[str]]:
+    available_specs: list[dict[str, object]] = []
+    missing_sources: list[str] = []
+    for source_spec in ERA5_SOURCE_SPECS:
+        source_path = data_dir / str(source_spec["file_name"])
+        if source_path.exists():
+            try:
+                with xr.open_dataset(source_path) as dataset:
+                    variable_name(
+                        dataset,
+                        ("temperature", "t"),
+                        "a temperature variable",
+                    )
+                    variable_name(
+                        dataset,
+                        ("specific_humidity", "q"),
+                        "a specific humidity variable",
+                    )
+                    variable_name(
+                        dataset,
+                        ("geopotential", "z"),
+                        "a geopotential variable",
+                    )
+                available_spec = dict(source_spec)
+                available_spec["path"] = source_path
+                available_specs.append(available_spec)
+            except ValueError:
+                missing_sources.append(f"{source_spec['source_name']} (missing required variables)")
+        else:
+            missing_sources.append(str(source_spec["source_name"]))
+    return available_specs, missing_sources
+
+
+def select_time_indices(n_available: int, n_select: int) -> np.ndarray:
     if n_available <= 1:
         return np.arange(n_available, dtype=int)
-    n_select = min(n_available, max(2, int(np.floor(np.sqrt(target_profiles)))))
     return select_profile_indices(n_available, n_select)
 
 
 def select_location_samples(
-    dataset: xr.Dataset, target_profiles: int, n_selected_times: int
+    dataset: xr.Dataset,
+    location_group_specs: list[dict[str, object]],
 ) -> tuple[str | None, str | None, list[dict[str, object]]]:
     latitude_name = next(
         (name for name in ("latitude", "lat") if name in dataset.coords),
@@ -234,7 +397,7 @@ def select_location_samples(
     used_indices: set[tuple[int, int]] = set()
     location_index = 0
 
-    for region_spec in REGION_SPECS:
+    for region_spec in location_group_specs:
         region_locations: list[dict[str, object]] = []
         ranked_locations = sorted(
             location_grid,
@@ -260,10 +423,8 @@ def select_location_samples(
         selected_locations.extend(region_locations)
 
     if not selected_locations:
-        n_locations_target = max(1, int(np.ceil(target_profiles / n_selected_times)))
-        selected_location_indices = select_profile_indices(
-            len(location_grid), n_locations_target
-        )
+        n_locations_target = min(len(location_grid), 8)
+        selected_location_indices = select_profile_indices(len(location_grid), n_locations_target)
         for fallback_index, grid_index in enumerate(selected_location_indices):
             location = dict(location_grid[int(grid_index)])
             location["location_index"] = fallback_index
@@ -288,6 +449,10 @@ def create_synthetic_profiles(
                 "longitude": baseline_profile["longitude"],
                 "region_name": synthetic_spec["region_name"],
                 "sample_group": synthetic_spec["sample_group"],
+                "source_name": "synthetic_profiles",
+                "climate_regime": "synthetic",
+                "surface_type": "synthetic",
+                "season_label": baseline_profile.get("season_label"),
                 "pressure": list(baseline_profile["pressure"]),
                 "temperature": list(baseline_profile["temperature"]),
                 "specific_humidity": list(baseline_profile["specific_humidity"]),
@@ -302,9 +467,11 @@ def create_synthetic_profiles(
     return synthetic_profiles
 
 
-def load_era5_arts_profiles(path: Path, limit: int) -> list[dict[str, object]]:
+def load_era5_arts_profiles_from_source(
+    source_spec: dict[str, object], profile_start_index: int
+) -> list[dict[str, object]]:
     profiles: list[dict[str, object]] = []
-    with xr.open_dataset(path) as dataset:
+    with xr.open_dataset(Path(source_spec["path"])) as dataset:
         pressure_name = variable_name(
             dataset, ("pressure", "level", "pressure_level"), "a pressure coordinate"
         )
@@ -323,12 +490,19 @@ def load_era5_arts_profiles(path: Path, limit: int) -> list[dict[str, object]]:
             None,
         )
         time_size = int(dataset.sizes.get(time_name, 1)) if time_name else 1
-        time_indices = select_time_indices(time_size, limit)
+        max_time_samples = int(source_spec.get("max_time_samples", time_size))
+        time_indices = select_time_indices(time_size, min(time_size, max_time_samples))
         latitude_name, longitude_name, selected_locations = select_location_samples(
-            dataset, limit, len(time_indices) if len(time_indices) else 1
+            dataset,
+            list(
+                source_spec.get(
+                    "location_group_specs",
+                    DEFAULT_LOCATION_GROUP_SPECS,
+                )
+            ),
         )
 
-        profile_counter = 0
+        profile_counter = profile_start_index
         for time_index in time_indices:
             valid_time = None
             if time_name:
@@ -380,13 +554,19 @@ def load_era5_arts_profiles(path: Path, limit: int) -> list[dict[str, object]]:
                     {
                         "profile_index": profile_counter,
                         "profile_id": (
-                            f"t{int(time_index):02d}_loc{int(location['location_index']):02d}"
+                            f"{source_spec['source_name']}_t{int(time_index):02d}"
+                            f"_loc{int(location['location_index']):02d}"
                         ),
                         "valid_time": None if valid_time is None else str(valid_time),
                         "latitude": location["latitude"],
                         "longitude": location["longitude"],
                         "region_name": location["region_name"],
                         "sample_group": location["sample_group"],
+                        "source_name": source_spec["source_name"],
+                        "climate_regime": source_spec.get("climate_regime"),
+                        "surface_type": source_spec.get("surface_type"),
+                        "season_label": source_spec.get("season_label")
+                        or season_label_from_time(valid_time),
                         "pressure": np.asarray(pressure.values, dtype=float).tolist(),
                         "temperature": np.asarray(temperature.values, dtype=float).tolist(),
                         "specific_humidity": np.asarray(humidity.values, dtype=float).tolist(),
@@ -395,8 +575,41 @@ def load_era5_arts_profiles(path: Path, limit: int) -> list[dict[str, object]]:
                 )
                 profile_counter += 1
 
+    return profiles
+
+
+def load_era5_arts_profiles(path: Path, limit: int) -> list[dict[str, object]]:
+    profiles: list[dict[str, object]] = []
+    if path == default_era5_path():
+        data_dir = path.parent
+        available_sources, _ = available_era5_source_specs(data_dir)
+        profile_counter = 0
+        for source_spec in available_sources:
+            source_profiles = load_era5_arts_profiles_from_source(
+                source_spec, profile_counter
+            )
+            profiles.extend(source_profiles)
+            profile_counter += len(source_profiles)
+    else:
+        source_spec = {
+            "source_name": path.stem,
+            "path": path,
+            "climate_regime": None,
+            "surface_type": None,
+            "season_label": None,
+            "location_group_specs": DEFAULT_LOCATION_GROUP_SPECS,
+            "max_time_samples": 999,
+        }
+        profiles = load_era5_arts_profiles_from_source(source_spec, 0)
+
+    if len(profiles) > limit:
+        selected_indices = select_profile_indices(len(profiles), limit)
+        profiles = [profiles[int(index)] for index in selected_indices]
+        for profile_index, profile in enumerate(profiles):
+            profile["profile_index"] = profile_index
+
     if profiles:
-        profiles.extend(create_synthetic_profiles(profiles[0], profile_counter))
+        profiles.extend(create_synthetic_profiles(profiles[0], len(profiles)))
 
     return profiles
 
@@ -512,6 +725,9 @@ def profile_metadata_row(
         "mean_temperature_k": float(temperature.mean()),
         "lower_layer_mean_temperature_k": float(temperature[lower_layer_mask].mean()),
         "upper_layer_mean_temperature_k": float(temperature[upper_layer_mask].mean()),
+        "mean_h2o_vmr": float(vmr_h2o.mean()),
+        "lower_layer_mean_h2o_vmr": float(vmr_h2o[lower_layer_mask].mean()),
+        "upper_layer_mean_h2o_vmr": float(vmr_h2o[upper_layer_mask].mean()),
         "min_h2o_vmr": float(vmr_h2o.min()),
         "max_h2o_vmr": float(vmr_h2o.max()),
     }
@@ -538,6 +754,10 @@ def simulate_multi_profile_observations(
                     "latitude": profile["latitude"],
                     "longitude": profile["longitude"],
                     "region_name": profile["region_name"],
+                    "source_name": profile.get("source_name"),
+                    "climate_regime": profile.get("climate_regime"),
+                    "surface_type": profile.get("surface_type"),
+                    "season_label": profile.get("season_label"),
                     "sample_group": profile["sample_group"],
                     "frequency_ghz": channel.frequency_hz / 1e9,
                     "tb_true_k": float(tb_true[channel_index, 0]),
@@ -577,6 +797,10 @@ def simulate_multi_profile_temperature_sensitivity(
                     "latitude": profile["latitude"],
                     "longitude": profile["longitude"],
                     "region_name": profile["region_name"],
+                    "source_name": profile.get("source_name"),
+                    "climate_regime": profile.get("climate_regime"),
+                    "surface_type": profile.get("surface_type"),
+                    "season_label": profile.get("season_label"),
                     "sample_group": profile["sample_group"],
                     "frequency_ghz": channel.frequency_hz / 1e9,
                     "tb_base_k": float(results["y_base"][channel_index, 0]),
@@ -623,6 +847,10 @@ def simulate_multi_profile_layer_temperature_sensitivity(
                     "latitude": profile["latitude"],
                     "longitude": profile["longitude"],
                     "region_name": profile["region_name"],
+                    "source_name": profile.get("source_name"),
+                    "climate_regime": profile.get("climate_regime"),
+                    "surface_type": profile.get("surface_type"),
+                    "season_label": profile.get("season_label"),
                     "sample_group": profile["sample_group"],
                     "frequency_ghz": channel.frequency_hz / 1e9,
                     "tb_base_k": float(results["y_base"][channel_index, 0]),
@@ -664,6 +892,10 @@ def simulate_multi_profile_humidity_sensitivity(
                     "latitude": profile["latitude"],
                     "longitude": profile["longitude"],
                     "region_name": profile["region_name"],
+                    "source_name": profile.get("source_name"),
+                    "climate_regime": profile.get("climate_regime"),
+                    "surface_type": profile.get("surface_type"),
+                    "season_label": profile.get("season_label"),
                     "sample_group": profile["sample_group"],
                     "frequency_ghz": channel.frequency_hz / 1e9,
                     "tb_base_k": float(results["y_base"][channel_index, 0]),
@@ -881,6 +1113,10 @@ def multi_profile_diversity_summary(results: pd.DataFrame) -> pd.DataFrame:
                 "latitude",
                 "longitude",
                 "region_name",
+                "source_name",
+                "climate_regime",
+                "surface_type",
+                "season_label",
             ],
             as_index=False,
         )
@@ -1155,9 +1391,41 @@ def print_multi_profile_summary(results: pd.DataFrame) -> None:
         .apply(lambda group: len(group.drop_duplicates()))
         .to_dict()
     )
+    source_counts = (
+        results.loc[results["source_name"].notna()]
+        .groupby("source_name")["profile_id"]
+        .nunique()
+        .to_dict()
+    )
+    season_counts = (
+        results.loc[results["season_label"].notna()]
+        .groupby("season_label")["profile_id"]
+        .nunique()
+        .to_dict()
+    )
+    climate_counts = (
+        results.loc[results["climate_regime"].notna()]
+        .groupby("climate_regime")["profile_id"]
+        .nunique()
+        .to_dict()
+    )
+    surface_counts = (
+        results.loc[results["surface_type"].notna()]
+        .groupby("surface_type")["profile_id"]
+        .nunique()
+        .to_dict()
+    )
     print(f"Selected times: {len(selected_valid_times) if selected_valid_times else 1}")
     print(f"Selected regions: {results['region_name'].nunique()}")
     print(f"Locations per region: {region_counts}")
+    if source_counts:
+        print(f"Profiles by source: {source_counts}")
+    if season_counts:
+        print(f"Profiles by season: {season_counts}")
+    if climate_counts:
+        print(f"Profiles by climate regime: {climate_counts}")
+    if surface_counts:
+        print(f"Profiles by surface type: {surface_counts}")
     print(
         f"Selected locations count: {len(selected_region_locations) if not selected_region_locations.empty else 1}"
     )
@@ -1182,12 +1450,13 @@ def print_multi_profile_summary(results: pd.DataFrame) -> None:
 def print_multi_profile_diversity_summary(summary: pd.DataFrame) -> None:
     print("Profile diversity summary:")
     print(
-        "Profile | region | valid_time | surface T | min T | max T | "
+        "Profile | source | season | region | valid_time | surface T | min T | max T | "
         "max H2O VMR | Tb min | Tb max"
     )
     for row in summary.itertuples(index=False):
         print(
-            f"{row.profile_id} | {row.region_name} | {row.valid_time} | "
+            f"{row.profile_id} | {row.source_name} | {row.season_label} | "
+            f"{row.region_name} | {row.valid_time} | "
             f"{row.surface_temperature_k:.1f} K | {row.min_temperature_k:.1f} K | "
             f"{row.max_temperature_k:.1f} K | {row.max_h2o_vmr:.3e} | "
             f"{row.tb_min_k:.1f} K | {row.tb_max_k:.1f} K"

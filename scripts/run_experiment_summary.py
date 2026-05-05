@@ -9,8 +9,8 @@ SRC_DIR = PROJECT_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from mwsat.pipeline.run_experiment import run_experiment_summary
-from mwsat.utils.config import load_all_configs
+from mwsat.pipeline.run_experiment import run_experiment_summary  # noqa: E402
+from mwsat.utils.config import load_all_configs  # noqa: E402
 
 
 def main() -> int:
