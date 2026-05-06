@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chalmers Satellite Application Brief</title>
+  <style>
+    :root { --bg:#f5f7fa; --paper:#ffffff; --text:#1b2430; --muted:#5c697b; --rule:#d7dde6; --accent:#0f4c81; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font-family: Georgia, 'Times New Roman', serif; line-height:1.68; }
+    main { max-width:920px; margin:32px auto; background:var(--paper); padding:56px 64px; border:1px solid var(--rule); box-shadow:0 14px 34px rgba(16,24,40,0.08); }
+    h1,h2,h3 { color:#102033; line-height:1.25; }
+    h1 { font-size:2rem; margin:0 0 1rem; }
+    h2 { font-size:1.35rem; margin-top:2.2rem; padding-top:0.3rem; border-top:1px solid var(--rule); }
+    h3 { font-size:1.05rem; margin-top:1.3rem; color:var(--accent); }
+    p { margin:0.9rem 0; }
+    ul,ol { margin:0.7rem 0 1rem 1.45rem; padding:0; }
+    li { margin:0.35rem 0; }
+    code { font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace; font-size:0.92em; background:#f3f5f7; padding:0.08rem 0.28rem; border-radius:4px; }
+    figure { margin:2rem 0; }
+    img { display:block; width:100%; height:auto; border:1px solid var(--rule); }
+    figcaption { margin-top:0.6rem; font-size:0.95rem; color:var(--muted); }
+    .meta { margin:1.4rem 0 2rem; padding:1rem 1.2rem; background:#f2f6fa; border-left:4px solid var(--accent); color:var(--muted); }
+    .footer-note { margin-top:3rem; padding-top:1rem; border-top:1px solid var(--rule); color:var(--muted); font-size:0.95rem; }
+    a { color:var(--accent); }
+    @media (max-width: 900px) { main { margin:0; padding:30px 22px; box-shadow:none; border:none; } }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="meta">Application brief aligned with the doctoral position in new atmospheric satellite missions (REF 2026-0196). This document summarizes validated repository results only and does not introduce new experiments or unsupported claims.</div>
+    <h1>Microwave Satellite Atmospheric Retrieval Under Instrument Constraints: Channel Sensitivity, Noise Propagation, and Instrument Trade-Off Analysis in a Physics-First PyARTS Framework</h1>
+<h2>1. Introduction</h2>
+<p>This project presents a controlled framework for studying how microwave instrument design decisions propagate into retrieval performance through radiative-transfer simulation, instrument-noise modeling, and interpretable retrieval experiments. It is built around a clear-sky PyARTS forward model, a minimal oxygen-band instrument definition, and a set of structured retrieval experiments designed to connect channel choice and noise assumptions to practical temperature-retrieval behavior.</p>
+<p>That framing is directly relevant to research on new atmospheric satellite missions. The project focuses on four themes that sit close to the center of mission-oriented remote sensing research:</p>
+<ul>
+<li>simulation of observations,</li>
+<li>incorporation of instrument characteristics and errors,</li>
+<li>assessment of technical trade-offs,</li>
+<li>and bridging instrument design to the later use of the measurements.</li>
+</ul>
+<p>Microwave satellite observations are central to atmospheric remote sensing because they provide information about temperature and humidity structure under conditions where visible and infrared systems are more limited. Temperature sounding channels in the oxygen absorption band are especially important for numerical weather prediction, atmospheric analysis, and long-term climate-oriented observation because their radiative response is tied directly to well-understood molecular absorption physics.</p>
+<p>For new atmospheric satellite missions, however, the scientific value of a microwave channel set cannot be judged from radiative-transfer theory alone. Instrument design decisions such as channel placement and noise performance affect what information is practically retrievable from the observations. A channel may be physically sensitive to a target quantity, but still contribute limited usable skill if its information is redundant with other channels or if noise dominates the signal relevant to a given retrieval problem.</p>
+<p>The core intellectual contribution of this project is therefore not simply “a retrieval pipeline.” I developed a structured experimental framework that shows retrieval performance emerging from two interacting sources:</p>
+<ul>
+<li>physical radiative sensitivity,</li>
+<li>and dataset or regime covariance structure.</li>
+</ul>
+<p>That distinction matters because a retrieval can look successful in a narrow dataset while still failing to generalize across atmospheric regimes. The framework was built specifically to expose that boundary in a controlled, interpretable way.</p>
+<h2>2. Research Question</h2>
+<p>The central research question is:</p>
+<p><strong>How do oxygen-band channel selection and instrument noise affect lower-layer and upper-layer atmospheric temperature retrieval accuracy in a simulation-based, physics-first microwave retrieval framework?</strong></p>
+<p>This question can be divided into four related sub-questions:</p>
+<ol>
+<li>Which channels are most sensitive to lower-layer and upper-layer temperature structure?</li>
+<li>How does retrieval error change as instrument noise increases?</li>
+<li>How does degrading a specific channel affect retrieval performance relative to degrading the instrument uniformly?</li>
+<li>What is the minimal channel subset that retains most of the useful information for the current retrieval targets?</li>
+</ol>
+<p>These questions are directly aligned with early-stage satellite mission design, where channel placement, noise requirements, expected measurement quality, and downstream retrieval value must be considered together rather than separately.</p>
+<p>The central scientific insight of the project is that retrieval performance emerges from two interacting components that must be analyzed together: <strong>radiative sensitivity</strong>, which defines what the channels can in principle observe, and <strong>dataset or regime covariance structure</strong>, which shapes how much of that signal is actually recoverable in a given retrieval setting. Making that interaction explicit is one of the main reasons the framework is useful.</p>
+<h2>3. System Description</h2>
+<p>The pipeline is built around clear-sky PyARTS forward simulations using ERA5 pressure-level atmospheric profiles. The forward model ingests temperature, specific humidity, and geopotential from ERA5, converts humidity into water-vapor volume mixing ratio, computes altitude from geopotential, and simulates brightness temperatures using oxygen and water-vapor absorption under a controlled clear-sky assumption.</p>
+<p>The current instrument representation is intentionally minimal. It uses three oxygen-band channels:</p>
+<ul>
+<li><code>50.3 GHz</code></li>
+<li><code>52.8 GHz</code></li>
+<li><code>54.4 GHz</code></li>
+</ul>
+<p>Channel-specific instrument noise is represented through <code>NEΔT</code>, and Gaussian observation noise is applied with deterministic seeding so that all experiments remain reproducible.</p>
+<p>Two scalar retrieval targets are considered:</p>
+<ul>
+<li><code>lower_layer_mean_temperature_k</code></li>
+<li><code>upper_layer_mean_temperature_k</code></li>
+</ul>
+<p>These targets are deliberately simple. They allow the relationship between radiative sensitivity, channel design, and retrieval performance to be studied before moving to a higher-dimensional profile retrieval problem.</p>
+<p>The atmospheric dataset includes three ERA5-derived regimes:</p>
+<ol>
+<li><code>winter_midlatitude_maritime_sample</code></li>
+<li><code>lower_latitude_maritime_2020</code></li>
+<li><code>high_latitude_continental_2020</code></li>
+</ol>
+<p>In addition, a small set of synthetic stress-test profiles is retained as explicitly labeled out-of-distribution cases. These are used for controlled robustness checks, not for ordinary model training.</p>
+<h2>4. Methods</h2>
+<h3>Forward simulation and sensitivity layer</h3>
+<p>The first stage of the pipeline establishes a validated clear-sky forward-model bridge from ERA5 to PyARTS. From that baseline, I ran several controlled sensitivity experiments:</p>
+<ul>
+<li>uniform atmospheric temperature perturbation,</li>
+<li>lower-layer and upper-layer temperature perturbations,</li>
+<li>humidity perturbations,</li>
+<li>multi-profile comparisons across atmospheric regimes.</li>
+</ul>
+<p>These experiments isolate which channels respond most strongly to different parts of the atmospheric temperature structure and whether those sensitivities remain stable across regimes.</p>
+<h3>Retrieval models</h3>
+<p>The retrieval layer was intentionally kept simple and interpretable. Three models were used:</p>
+<ul>
+<li>mean baseline,</li>
+<li>linear regression,</li>
+<li>ridge regression.</li>
+</ul>
+<p>These models were chosen not for maximum predictive power, but because they make it possible to connect retrieval behavior directly to the structure of the observation vector and to known channel physics. No nonlinear models, neural networks, or expanded predictor sets were introduced.</p>
+<h3>Noise modeling</h3>
+<p>Instrument noise was represented through channel-specific <code>NEΔT</code>. Two complementary noise experiments were then built:</p>
+<ol>
+<li>a <strong>uniform noise sweep</strong>, in which all channel <code>NEΔT</code> values were scaled together by multiplicative factors;</li>
+<li>a <strong>channel-specific degradation experiment</strong>, in which only one channel <code>NEΔT</code> was scaled at a time.</li>
+</ol>
+<p>This separation allows overall noise propagation and channel-specific vulnerability to be distinguished cleanly.</p>
+<h3>Channel ablation</h3>
+<p>To test channel necessity directly, all 3-channel, 2-channel, and 1-channel combinations were evaluated. This makes it possible to identify whether a reduced channel set can retain most of the useful retrieval skill for the current scalar targets.</p>
+<h3>Evaluation setup</h3>
+<p>Two main retrieval evaluation modes were used:</p>
+<ul>
+<li>global leave-one-profile-out cross-validation across all ERA5 profiles,</li>
+<li>source-specific leave-one-profile-out cross-validation within each <code>source_name</code>.</li>
+</ul>
+<p>The source-specific experiments were used as controlled diagnostics of within-regime behavior. Separate leave-one-regime-out testing was also performed earlier in the project and showed that a single global linear mapping does not generalize well to unseen regimes.</p>
+<h2>5. Key Findings</h2>
+<h3>Regime dependence</h3>
+<p>The retrieval behavior is strongly regime-dependent. A single global linear retrieval can appear successful under profile-level cross-validation, but it fails badly under leave-one-regime-out testing. This shows that a global linear mapping is still influenced heavily by regime-specific covariance structure rather than by a regime-invariant radiative relationship.</p>
+<p>At the same time, source-specific retrieval substantially improves within-regime behavior. The experiments therefore reveal a mixed but interpretable result: the retrieval is not arbitrary, but the effective mapping between brightness temperatures and target temperature depends on the thermodynamic regime being sampled.</p>
+<h3>Vertical channel sensitivity</h3>
+<p>The vertical sensitivity results were physically consistent:</p>
+<ul>
+<li><code>52.8 GHz</code> is the most important channel for the lower-layer target,</li>
+<li><code>54.4 GHz</code> is the most important channel for the upper-layer target,</li>
+<li><code>50.3 GHz</code> plays a smaller and more secondary role under the present scalar-target setup.</li>
+</ul>
+<p>This pattern emerged first in the forward sensitivity experiments and was reinforced by later retrieval and channel trade-off experiments.</p>
+<h3>Noise propagation behavior</h3>
+<p>The uniform noise sweep showed that retrieval error increases smoothly as <code>NEΔT</code> increases. This held for both targets and for both global and source-specific retrieval setups. Lower-layer retrieval degraded more slowly than upper-layer retrieval, both in RMSE and in normalized RMSE.</p>
+<p>This indicates that the current three-channel system carries a more robust lower-layer temperature signal than upper-layer temperature signal under the present clear-sky assumptions. In other words, upper-layer retrieval is not just harder because of the model choice; it is harder because the available observation vector constrains it less directly.</p>
+<p>See <a href="figures/experiments/noise_sweep_rmse.png">noise_sweep_rmse.png</a>, which links progressive <code>NEΔT</code> degradation directly to retrieval uncertainty, and <a href="figures/experiments/noise_sweep_target_comparison.png">noise_sweep_target_comparison.png</a>, which contrasts lower-layer and upper-layer degradation under the same instrument assumptions.</p>
+<figure><img src="figures/experiments/noise_sweep_rmse.png" alt="Noise sweep RMSE"><figcaption>Figure 1. Global retrieval degradation under increasing instrument noise, showing how stronger <code>NEΔT</code> propagates into larger retrieval uncertainty.</figcaption></figure>
+<h3>Channel-specific degradation effects</h3>
+<p>The one-channel-at-a-time noise experiment clarified which parts of the instrument matter most:</p>
+<ul>
+<li>degrading <code>52.8 GHz</code> hurts lower-layer retrieval most,</li>
+<li>degrading <code>54.4 GHz</code> hurts upper-layer retrieval most,</li>
+<li>degrading <code>50.3 GHz</code> has weak effect on upper-layer retrieval.</li>
+</ul>
+<p>This result matters because it shows that uniform instrument-noise assumptions can hide channel-specific weaknesses. Overall instrument quality matters, but different retrieval targets are not equally vulnerable to the degradation of every channel.</p>
+<p>The channel-specific behavior is summarized in <a href="figures/experiments/rmse_vs_noise_by_channel.png">rmse_vs_noise_by_channel.png</a>, which identifies target-dependent channel vulnerability rather than only overall noise sensitivity.</p>
+<figure><img src="figures/experiments/rmse_vs_noise_by_channel.png" alt="Channel-specific noise sensitivity"><figcaption>Figure 2. One-channel-at-a-time degradation reveals which channels are most vulnerable for each retrieval target.</figcaption></figure>
+<h3>Minimal channel combinations</h3>
+<p>The channel ablation experiment showed that the strongest reduced channel pair is:</p>
+<ul>
+<li><code>52.8 + 54.4 GHz</code></li>
+</ul>
+<p>This pair retains nearly all of the retrieval skill of the full three-channel configuration for the present lower-layer and upper-layer scalar temperature targets. The <code>50.3 GHz</code> channel is not useless, but it contributes the least unique information under the current setup.</p>
+<p>This result is shown most directly in <a href="figures/experiments/rmse_by_channel_combination.png">rmse_by_channel_combination.png</a>, which tests channel necessity and redundancy under the current retrieval objectives.</p>
+<figure><img src="figures/experiments/rmse_by_channel_combination.png" alt="Channel ablation RMSE"><figcaption>Figure 3. Channel ablation tests which channel subsets remain necessary and which information is partly redundant for the present scalar targets.</figcaption></figure>
+<h2>6. System Understanding</h2>
+<p>Taken together, the experiments provide a coherent interpretation of the retrieval system.</p>
+<p>First, retrieval performance is controlled by both <strong>physical channel sensitivity</strong> and <strong>dataset covariance structure</strong>. The forward experiments show that the oxygen-band channels respond differently to lower-level and upper-level perturbations in a physically meaningful way. The retrieval experiments confirm that these physical differences are reflected in practical prediction skill. At the same time, the regime-dependence experiments show that a single global linear mapping is not stable across atmospheric regimes, meaning covariance structure still matters strongly.</p>
+<p>Second, the channels are <strong>overlapping rather than independent</strong>. <code>52.8 GHz</code>, <code>54.4 GHz</code>, and <code>50.3 GHz</code> do not correspond to completely separate atmospheric layers. Instead, they sample overlapping parts of the oxygen-band temperature response with different weighting. This explains why:</p>
+<ul>
+<li>no single channel fully determines a target,</li>
+<li>the strongest reduced subset is a pair rather than a single channel,</li>
+<li>and a reduced channel set can sometimes perform nearly as well as the full system.</li>
+</ul>
+<p>Third, upper-layer retrieval is harder because it depends more strongly on the higher-frequency oxygen response and because the current observation vector is small. The lower-layer target is better supported by the current three-channel system, especially through <code>52.8 GHz</code>. The upper-layer target remains physically meaningful, but more fragile under noise and more sensitive to sample-dependent covariance.</p>
+<p>Overall, this project demonstrates that the retrieval is neither purely a covariance artifact nor purely a direct physical inversion. The framework isolates a structured combination of radiative sensitivity and regime-specific statistical mapping, which is precisely why it is useful as a research baseline.</p>
+<h2>7. Instrument Design Implications</h2>
+<p>One reason this matters for new atmospheric satellite missions is that it connects early instrument assumptions to downstream retrieval behavior in a traceable way. In the present framework:</p>
+<ul>
+<li>channel choice is linked directly to retrieval skill,</li>
+<li><code>NEΔT</code> assumptions are linked directly to retrieval uncertainty,</li>
+<li>channel redundancy is linked to possible instrument simplification,</li>
+<li>and regime dependence highlights limits of a single global retrieval or later AI/ML generalization.</li>
+</ul>
+<p>This is not yet a mission design recommendation framework, but it is a useful early-stage instrument trade-off reasoning framework.</p>
+<p>Several practical lessons for instrument design follow from the experiments.</p>
+<h3>Importance of 52.8 GHz</h3>
+<p><code>52.8 GHz</code> is the clearest priority channel for lower-layer temperature retrieval. It dominates the lower-layer sensitivity diagnostics, its degradation produces the largest lower-layer retrieval penalty, and its inclusion is necessary for the strongest reduced channel configurations.</p>
+<h3>Importance of 54.4 GHz</h3>
+<p><code>54.4 GHz</code> is the clearest priority channel for upper-layer temperature retrieval. It dominates upper-layer sensitivity, and any reduced configuration without it loses substantial upper-layer skill. Its noise performance is therefore especially important if upper-atmospheric temperature information is a design objective.</p>
+<h3>Limited role of 50.3 GHz for current scalar targets</h3>
+<p>Under the present setup, <code>50.3 GHz</code> contributes the least unique information. This does not mean it is physically irrelevant, but it does mean that these specific scalar retrieval targets do not justify it as strongly as <code>52.8 GHz</code> and <code>54.4 GHz</code>. Final design conclusions would still require broader targets, broader atmospheric regimes, and more realistic uncertainty structures.</p>
+<h3>Trade-offs</h3>
+<p>The experiments reveal that channel prioritization cannot be based on sensitivity arguments alone. Channel usefulness depends on:</p>
+<ul>
+<li>which target is being retrieved,</li>
+<li>how much channel information overlaps,</li>
+<li>how noise propagates into the retrieval,</li>
+<li>and whether the retrieval must generalize across regimes.</li>
+</ul>
+<p>That is exactly the type of design trade-off problem faced in new atmospheric satellite missions.</p>
+<h2>8. Why This Demonstrates Fit to the PhD Topic</h2>
+<p>This project maps directly onto the scientific themes of a doctoral position in new atmospheric satellite missions.</p>
+<p>It demonstrates:</p>
+<ul>
+<li><strong>simulation of observations</strong> through PyARTS-based microwave forward modeling,</li>
+<li><strong>incorporation of instrument characteristics and errors</strong> through channel-specific <code>NEΔT</code>,</li>
+<li><strong>assessment of technical trade-offs</strong> through noise sweeps, channel degradation, and ablation,</li>
+<li><strong>microwave sensor relevance</strong> through oxygen-band temperature sounding,</li>
+<li><strong>physics + computing</strong> through radiative-transfer simulation paired with reproducible data analysis,</li>
+<li><strong>careful scientific communication</strong> through explicit limitations and structured experiment interpretation.</li>
+</ul>
+<p>Just as importantly, the project does not stop at forward simulation. I used the framework to connect instrument assumptions to retrieval consequences and to separate physically meaningful signal from regime-specific covariance where possible. That is the kind of reasoning needed before moving to more complex retrieval systems, inverse methods, or machine-learning approaches.</p>
+<h2>9. Limitations</h2>
+<p>The current system is intentionally limited:</p>
+<ul>
+<li>clear-sky only,</li>
+<li>linear retrieval only,</li>
+<li>small dataset,</li>
+<li>synthetic noisy observations rather than real satellite data,</li>
+<li>scalar temperature targets rather than full profile retrieval,</li>
+<li>no formal inverse methods such as optimal estimation yet.</li>
+</ul>
+<p>These limitations are not hidden weaknesses of the project; they define the controlled baseline from which more realistic mission-relevant retrieval studies can be built.</p>
+<p>The current channel-importance conclusions should therefore be read as valid within the tested regimes and retrieval targets, while broader atmospheric variability will still be required to confirm how general those rankings remain.</p>
+<p>The project should therefore be interpreted as a controlled research prototype rather than an operational retrieval system. Its value lies in establishing a transparent experimental framework, not in claiming final mission performance.</p>
+<h2>10. Extension to PhD Research</h2>
+<p>The current framework suggests a coherent next research trajectory rather than just a generic list of extensions.</p>
+<p>The natural next step from the current framework would be to move from empirical linear retrieval toward <strong>Bayesian inverse methods</strong>, especially <strong>optimal estimation (OEM)</strong>, while keeping the present clear-sky system as the benchmark baseline. In parallel, the current sensitivity results could be formalized through <strong>Jacobians</strong>, <strong>weighting functions</strong>, and <strong>information content analysis</strong>, so that the difference between physically recoverable signal and dataset-dependent statistical skill is quantified more rigorously rather than inferred indirectly.</p>
+<p>From there, the clear-sky framework would provide a natural baseline for later work with <strong>cloud- and scattering-aware retrieval problems</strong>, including future use of Chalmers atmospheric water and hydrometeor resources as compatible extensions rather than as data already used here. Broader atmospheric datasets and wider regime coverage would also be needed to test whether the current channel-priority results remain stable beyond the present controlled sample. This framework also provides the controlled baseline required for integrating <strong>physics-informed machine learning</strong> without conflating model flexibility with physical information content. In that sense, machine learning is not ignored here, but it is placed in the correct sequence: after the forward-model baseline and error structure are understood.</p>
+<h2>11. Conclusion</h2>
+<p>This project demonstrates a coherent and research-grade framework for studying how microwave oxygen-band channel design and instrument noise affect atmospheric temperature retrieval performance. The main conclusions are that retrieval behavior is regime-dependent, lower-layer retrieval is controlled primarily by <code>52.8 GHz</code>, upper-layer retrieval is controlled primarily by <code>54.4 GHz</code>, retrieval error increases smoothly with <code>NEΔT</code>, and the strongest reduced channel subset for the present scalar targets is <code>52.8 + 54.4 GHz</code>.</p>
+<p>The broader significance of the work is not that it solves atmospheric retrieval in operational form, but that it establishes a transparent link between radiative physics, observation simulation, instrument characteristics, and retrieval accuracy. This framework isolates the boundary between physically recoverable information and dataset-dependent retrieval skill, providing a controlled basis for evaluating microwave instrument design trade-offs. That makes it a strong foundation for PhD-level research on new atmospheric satellite missions, where physically informed instrument trade-offs must be evaluated before more complex retrieval systems are built.</p>
+    <div class="footer-note">Source material: existing validated reports and curated experiment figures from the <code>mw-sat-atmos-retrieval</code> repository.</div>
+  </main>
+</body>
+</html>
